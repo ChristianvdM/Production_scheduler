@@ -143,7 +143,8 @@ def format_schedule_sheet(
 
 def build_campus_schedule(
     assignments,
-    campus
+    campus,
+    date_order
 ):
 
     campus_df = assignments[
@@ -152,14 +153,6 @@ def build_campus_schedule(
 
     if campus_df.empty:
         return pd.DataFrame()
-
-    # ---------------------------------------------
-    # KEEP ORIGINAL DATE LABELS
-    # ---------------------------------------------
-
-    campus_df["Date"] = campus_df[
-        "Date"
-    ].astype(str)
 
     # ---------------------------------------------
     # ROLE ORDER
@@ -193,6 +186,25 @@ def build_campus_schedule(
 
         aggfunc="first"
     )
+
+    # ---------------------------------------------
+    # PRESERVE INPUT FILE DATE ORDER
+    # ---------------------------------------------
+
+    existing_dates = [
+
+        d for d in date_order
+
+        if d in pivot.columns
+    ]
+
+    pivot = pivot.reindex(
+        columns=existing_dates
+    )
+
+    # ---------------------------------------------
+    # ROLE ORDER
+    # ---------------------------------------------
 
     pivot = pivot.reindex(
         role_order
@@ -256,10 +268,6 @@ def build_detailed_sheet(
     if detailed.empty:
         return detailed
 
-    detailed["Date"] = detailed[
-        "Date"
-    ].astype(str)
-
     detailed = detailed.sort_values([
 
         "Date",
@@ -286,6 +294,11 @@ def build_excel_output(
         "summary"
     ]
 
+    date_order = schedule_result.get(
+        "date_order",
+        []
+    )
+
     with pd.ExcelWriter(
         output,
         engine="xlsxwriter"
@@ -302,7 +315,8 @@ def build_excel_output(
             campus_schedule = (
                 build_campus_schedule(
                     assignments,
-                    campus
+                    campus,
+                    date_order
                 )
             )
 
