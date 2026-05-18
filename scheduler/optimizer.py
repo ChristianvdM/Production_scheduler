@@ -144,6 +144,25 @@ class Scheduler:
         self.last_director_campus = {}
 
         # -----------------------------------------
+        # SPOUSE / FAMILY DETECTION
+        # -----------------------------------------
+
+        self.family_groups = defaultdict(list)
+
+        for person in self.people:
+
+            parts = str(person).strip().split()
+
+            if len(parts) < 2:
+                continue
+
+            surname = parts[-1].lower()
+
+            self.family_groups[
+                surname
+            ].append(person)
+
+        # -----------------------------------------
         # DATE COLUMNS + SERVICE TYPES
         # -----------------------------------------
 
@@ -483,6 +502,64 @@ class Scheduler:
         return level_one_count >= 2
 
     # -------------------------------------------------
+    # FAMILY CAMPUS MATCHING
+    # -------------------------------------------------
+
+    def family_same_campus_bonus(
+        self,
+        person,
+        campus,
+        date
+    ):
+
+        parts = str(person).strip().split()
+
+        if len(parts) < 2:
+            return 0
+
+        surname = parts[-1].lower()
+
+        family_members = self.family_groups.get(
+            surname,
+            []
+        )
+
+        if len(family_members) <= 1:
+            return 0
+
+        bonus = 0
+
+        for assignment in self.assignments:
+
+            if assignment["Date"] != date:
+                continue
+
+            if assignment["Campus"] != campus:
+                continue
+
+            assigned_person = assignment["Person"]
+
+            if assigned_person == person:
+                continue
+
+            assigned_parts = str(
+                assigned_person
+            ).strip().split()
+
+            if len(assigned_parts) < 2:
+                continue
+
+            assigned_surname = (
+                assigned_parts[-1].lower()
+            )
+
+            if assigned_surname == surname:
+
+                bonus += 75
+
+        return bonus
+
+    # -------------------------------------------------
     # ASSIGN ROLE
     # -------------------------------------------------
 
@@ -577,12 +654,22 @@ class Scheduler:
             )
 
             # -------------------------------------
+            # FAMILY CAMPUS MATCHING
+            # -------------------------------------
+
+            if service_type == "Sunday":
+
+                score += self.family_same_campus_bonus(
+                    person,
+                    campus,
+                    date
+                )
+
+            # -------------------------------------
             # DIRECTOR ROTATION
             # -------------------------------------
 
             if role == "Director":
-
-                # General balancing
 
                 score -= (
 
@@ -590,8 +677,6 @@ class Scheduler:
                         person
                     ][campus] * 25
                 )
-
-                # Prevent same campus two weeks in a row
 
                 last_assignment = (
                     self.last_director_campus.get(
