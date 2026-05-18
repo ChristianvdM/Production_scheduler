@@ -1,17 +1,57 @@
 import streamlit as st
+import pandas as pd
+from io import BytesIO
+import base64
+
+from scheduler.loaders import load_dataframe
+from scheduler.optimizer import generate_schedule
+from scheduler.exports import build_excel_output
+from scheduler.metrics import build_metrics
+
+st.set_page_config(
+    page_title="CPT Production Team Scheduler",
+    layout="wide"
+)
+
+st.markdown(
+    """
+    <style>
+        body {
+            background-color: #000000;
+            color: white;
+        }
+
+        .stApp {
+            background-color: #000000;
+        }
+
+        .stButton>button,
+        .stDownloadButton>button {
+            background-color: #444;
+            color: white;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+try:
+    with open("assets/image.png", "rb") as img_file:
+        encoded = base64.b64encode(img_file.read()).decode()
+
+        st.markdown(
+            f"""
+            <div style='text-align: center;'>
+                <img src='data:image/png;base64,{encoded}' width='600'>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
 except FileNotFoundError:
     st.warning("Logo not found")
 
 st.title("📅 CPT Production Team Scheduler")
-
-st.markdown(
-    """
-    Upload:
-
-    - Skills File (.ods / .xlsx / .csv)
-    - Availability File (.ods / .xlsx / .csv)
-    """
-)
 
 skills_file = st.file_uploader(
     "Upload Skills File",
@@ -72,7 +112,7 @@ if skills_file and availability_file:
     st.dataframe(schedule_result['summary'])
 
     st.markdown("## Schedule Preview")
-    st.dataframe(schedule_result['assignments'].head(50))
+    st.dataframe(schedule_result['assignments'])
 
     st.download_button(
         "📥 Download Schedule",
