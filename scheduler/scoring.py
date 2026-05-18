@@ -1,26 +1,13 @@
 import pandas as pd
 import numpy as np
 
-# -------------------------------------------------
-# WEIGHTING CONFIG
-# -------------------------------------------------
-
 FAIRNESS_WEIGHT = 5
-
 PROFICIENCY_WEIGHT = 2
-
 COVERAGE_WEIGHT = 3
-
 FATIGUE_WEIGHT = 4
-
 ELITE_PENALTY_WEIGHT = 12
-
 FREE_SUNDAY_WEIGHT = 15
 
-
-# -------------------------------------------------
-# CANDIDATE SCORER
-# -------------------------------------------------
 
 class CandidateScorer:
 
@@ -180,11 +167,6 @@ class CandidateScorer:
         self,
         skill
     ):
-
-        """
-        Encourages development exposure
-        for beginner volunteers.
-        """
 
         if 0 < skill < 2:
             return 15
