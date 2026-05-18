@@ -1,218 +1,172 @@
-import numpy as np
 import pandas as pd
 
+from scheduler.optimizer import (
+    CAMPUSES,
+    SERVICE_CONFIG
+)
 
-def build_metrics(schedule_result):
+# -------------------------------------------------
+# BUILD METRICS
+# -------------------------------------------------
 
-    assignments = schedule_result.get(
-        "assignments",
-        pd.DataFrame()
-    )
+def build_metrics(
+    schedule_result
+):
 
-    summary = schedule_result.get(
-        "summary",
-        pd.DataFrame()
-    )
+    assignments = schedule_result[
+        "assignments"
+    ]
 
-    # -------------------------------------------------
-    # EMPTY SAFETY
-    # -------------------------------------------------
+    summary = schedule_result[
+        "summary"
+    ]
 
     if assignments.empty:
 
         return {
+
             "coverage_rate": 0,
+
             "unfilled_roles": 0,
+
             "fairness_std_dev": 0,
-            "avg_skill_score": 0,
-            "total_assignments": 0,
-            "unique_volunteers": 0,
-            "assistant_assignments": 0
+
+            "avg_skill_score": 0
         }
 
-    # -------------------------------------------------
-    # TOTAL ASSIGNMENTS
-    # -------------------------------------------------
+    # =============================================
+    # EXPECTED ROLE COUNT
+    # =============================================
 
-    total_assignments = len(assignments)
+    expected_roles = 0
 
-    # -------------------------------------------------
-    # UNIQUE VOLUNTEERS
-    # -------------------------------------------------
+    unique_dates = assignments[[
+        "Date",
+        "Service"
+    ]].drop_duplicates()
 
-    unique_volunteers = assignments[
-        "Person"
-    ].nunique()
+    for _, row in unique_dates.iterrows():
 
-    # -------------------------------------------------
-    # AVERAGE SKILL SCORE
-    # -------------------------------------------------
+        service = row["Service"]
 
-    if "Skill" in assignments.columns:
+        roles = SERVICE_CONFIG[
+            service
+        ]
 
-        avg_skill_score = round(
-            pd.to_numeric(
-                assignments["Skill"],
-                errors="coerce"
-            ).mean(),
-            2
+        role_count = sum(
+            r["count"]
+            for r in roles
         )
 
-    else:
+        # -----------------------------------------
+        # PRAYER
+        # -----------------------------------------
 
-        avg_skill_score = 0
+        if service == "Prayer":
 
-    # -------------------------------------------------
-    # FAIRNESS STD DEV
-    # -------------------------------------------------
+            expected_roles += role_count
 
-    volunteer_counts = assignments.groupby(
-        "Person"
-    ).size()
+        # -----------------------------------------
+        # SUNDAY SERVICES
+        # -----------------------------------------
 
-    fairness_std_dev = round(
-        np.std(volunteer_counts),
-        2
-    )
+        else:
 
-    # -------------------------------------------------
-    # ASSISTANT COUNT
-    # -------------------------------------------------
-
-    assistant_assignments = len(
-        assignments[
-            assignments["Role"]
-            .astype(str)
-            .str.contains(
-                "Assistant",
-                case=False,
-                na=False
+            expected_roles += (
+                role_count *
+                len(CAMPUSES)
             )
-        ]
-    )
 
-    # -------------------------------------------------
-    # COVERAGE RATE
-    # -------------------------------------------------
+    # =============================================
+    # ACTUAL ASSIGNMENTS
+    # =============================================
 
-    required_roles_per_campus = 5
+    actual_roles = len(assignments)
 
-    campuses = assignments[
-        "Campus"
-    ].nunique()
+    # =============================================
+    # COVERAGE
+    # =============================================
 
-    dates = assignments[
-        "Date"
-    ].nunique()
-
-    expected_assignments = (
-        required_roles_per_campus *
-        campuses *
-        dates
-    )
-
-    if expected_assignments == 0:
+    if expected_roles == 0:
 
         coverage_rate = 0
 
     else:
 
         coverage_rate = round(
+
             (
-                total_assignments /
-                expected_assignments
+                actual_roles /
+                expected_roles
             ) * 100,
+
             1
         )
 
-    # -------------------------------------------------
-    # UNFILLED ROLES
-    # -------------------------------------------------
-
     unfilled_roles = max(
         0,
-        expected_assignments -
-        total_assignments
+        expected_roles - actual_roles
     )
 
-    # -------------------------------------------------
-    # FREE SUNDAY METRIC
-    # -------------------------------------------------
+    # =============================================
+    # FAIRNESS
+    # =============================================
 
-    free_sunday_count = 0
+    if summary.empty:
 
-    if not summary.empty:
+        fairness_std_dev = 0
 
-        if "Total Assignments" in summary.columns:
+    else:
 
-            max_assignments = summary[
+        fairness_std_dev = round(
+
+            summary[
                 "Total Assignments"
-            ].max()
+            ].std(),
 
-            free_sunday_count = len(
-                summary[
-                    summary["Total Assignments"]
-                    < max_assignments
-                ]
-            )
-
-    # -------------------------------------------------
-    # CAMPUS BALANCE
-    # -------------------------------------------------
-
-    campus_balance_score = 0
-
-    campus_columns = [
-        c for c in summary.columns
-        if c in [
-            "Tygerberg",
-            "Stellies",
-            "Paarl"
-        ]
-    ]
-
-    if campus_columns:
-
-        campus_totals = summary[
-            campus_columns
-        ].sum()
-
-        campus_balance_score = round(
-            np.std(campus_totals),
             2
         )
 
-    # -------------------------------------------------
-    # RETURN METRICS
-    # -------------------------------------------------
+        if pd.isna(
+            fairness_std_dev
+        ):
+
+            fairness_std_dev = 0
+
+    # =============================================
+    # SKILL SCORE
+    # =============================================
+
+    avg_skill_score = round(
+
+        assignments[
+            "Skill"
+        ].mean(),
+
+        2
+    )
+
+    if pd.isna(
+        avg_skill_score
+    ):
+
+        avg_skill_score = 0
+
+    # =============================================
+    # RETURN
+    # =============================================
 
     return {
 
-        "coverage_rate": coverage_rate,
+        "coverage_rate":
+            coverage_rate,
 
-        "unfilled_roles": int(
-            unfilled_roles
-        ),
+        "unfilled_roles":
+            unfilled_roles,
 
-        "fairness_std_dev": fairness_std_dev,
+        "fairness_std_dev":
+            fairness_std_dev,
 
-        "avg_skill_score": avg_skill_score,
-
-        "total_assignments": int(
-            total_assignments
-        ),
-
-        "unique_volunteers": int(
-            unique_volunteers
-        ),
-
-        "assistant_assignments": int(
-            assistant_assignments
-        ),
-
-        "free_sunday_count": int(
-            free_sunday_count
-        ),
-
-        "campus_balance_score": campus_balance_score
+        "avg_skill_score":
+            avg_skill_score
     }
