@@ -584,10 +584,6 @@ class Scheduler:
 
         for person in available:
 
-            # -------------------------------------
-            # GLOBAL DAILY LOCK
-            # -------------------------------------
-
             if person in used_people:
                 continue
 
@@ -654,7 +650,7 @@ class Scheduler:
             )
 
             # -------------------------------------
-            # FAMILY CAMPUS MATCHING
+            # FAMILY MATCHING
             # -------------------------------------
 
             if service_type == "Sunday":
@@ -671,11 +667,26 @@ class Scheduler:
 
             if role == "Director":
 
-                score -= (
+                total_director_assignments = sum(
 
                     self.director_campus_history[
                         person
-                    ][campus] * 25
+                    ].values()
+                )
+
+                score -= (
+                    total_director_assignments * 120
+                )
+
+                same_campus_count = (
+
+                    self.director_campus_history[
+                        person
+                    ][campus]
+                )
+
+                score -= (
+                    same_campus_count * 200
                 )
 
                 last_assignment = (
@@ -692,7 +703,7 @@ class Scheduler:
 
                     if last_campus == campus:
 
-                        score -= 1000
+                        score -= 5000
 
             # -------------------------------------
             # ASSISTANT FAIRNESS
@@ -838,10 +849,6 @@ class Scheduler:
                 date,
                 "Sunday"
             )
-
-            # =====================================
-            # GLOBAL DAILY LOCK
-            # =====================================
 
             daily_used_people = set()
 
