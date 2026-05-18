@@ -43,10 +43,6 @@ def format_schedule_sheet(
     dataframe
 ):
 
-    # ---------------------------------------------
-    # FORMATS
-    # ---------------------------------------------
-
     header_format = workbook.add_format({
 
         "bold": True,
@@ -118,24 +114,7 @@ def format_schedule_sheet(
                     cell_format
                 )
 
-    # ---------------------------------------------
-    # FREEZE PANES
-    # ---------------------------------------------
-
     worksheet.freeze_panes(1, 1)
-
-    # ---------------------------------------------
-    # ROW HEIGHT
-    # ---------------------------------------------
-
-    for row_num in range(
-        len(dataframe) + 1
-    ):
-
-        worksheet.set_row(
-            row_num,
-            28
-        )
 
 # -------------------------------------------------
 # BUILD CAMPUS SHEET
@@ -148,15 +127,17 @@ def build_campus_schedule(
 ):
 
     campus_df = assignments[
-        assignments["Campus"] == campus
+
+        (assignments["Campus"] == campus)
+
+        &
+
+        (assignments["Service"] == "Sunday")
+
     ].copy()
 
     if campus_df.empty:
         return pd.DataFrame()
-
-    # ---------------------------------------------
-    # ROLE ORDER
-    # ---------------------------------------------
 
     role_order = [
 
@@ -167,14 +148,8 @@ def build_campus_schedule(
 
         "Lights",
 
-        "Resi",
-
-        "Runner"
+        "Resi"
     ]
-
-    # ---------------------------------------------
-    # PIVOT
-    # ---------------------------------------------
 
     pivot = campus_df.pivot_table(
 
@@ -187,9 +162,81 @@ def build_campus_schedule(
         aggfunc="first"
     )
 
-    # ---------------------------------------------
-    # PRESERVE INPUT FILE DATE ORDER
-    # ---------------------------------------------
+    existing_dates = [
+
+        d for d in date_order
+
+        if d in pivot.columns
+    ]
+
+    pivot = pivot.reindex(
+        columns=existing_dates
+    )
+
+    pivot = pivot.reindex(
+        role_order
+    )
+
+    pivot = pivot.fillna("")
+
+    pivot = pivot.reset_index()
+
+    return pivot
+
+# -------------------------------------------------
+# BUILD PRAYER SHEET
+# -------------------------------------------------
+
+def build_prayer_schedule(
+    assignments,
+    date_order
+):
+
+    prayer_df = assignments[
+
+        assignments["Service"] == "Prayer"
+
+    ].copy()
+
+    if prayer_df.empty:
+        return pd.DataFrame()
+
+    role_order = [
+
+        "Sound",
+
+        "Sound Assistant",
+
+        "Runner"
+    ]
+
+    prayer_df["Role_Display"] = prayer_df.groupby(
+        ["Date", "Role"]
+    ).cumcount() + 1
+
+    prayer_df["Role_Display"] = prayer_df.apply(
+
+        lambda row:
+
+        f"{row['Role']} {row['Role_Display']}"
+
+        if row["Role"] == "Sound Assistant"
+
+        else row["Role"],
+
+        axis=1
+    )
+
+    pivot = prayer_df.pivot_table(
+
+        index="Role_Display",
+
+        columns="Date",
+
+        values="Person",
+
+        aggfunc="first"
+    )
 
     existing_dates = [
 
@@ -202,17 +249,30 @@ def build_campus_schedule(
         columns=existing_dates
     )
 
-    # ---------------------------------------------
-    # ROLE ORDER
-    # ---------------------------------------------
+    desired_order = [
+
+        "Sound",
+
+        "Sound Assistant 1",
+        "Sound Assistant 2",
+
+        "Runner"
+    ]
 
     pivot = pivot.reindex(
-        role_order
+        desired_order
     )
 
     pivot = pivot.fillna("")
 
     pivot = pivot.reset_index()
+
+    pivot.rename(
+        columns={
+            "Role_Display": "Role"
+        },
+        inplace=True
+    )
 
     return pivot
 
@@ -237,6 +297,8 @@ def build_summary_sheet(
         "Stellies",
         "Paarl",
 
+        "Prayer",
+
         "Target Assignments",
 
         "Fairness Delta"
@@ -249,14 +311,12 @@ def build_summary_sheet(
         if c in summary.columns
     ]
 
-    summary = summary[
+    return summary[
         existing
     ].copy()
 
-    return summary
-
 # -------------------------------------------------
-# BUILD DETAILED ASSIGNMENTS
+# BUILD DETAILED SHEET
 # -------------------------------------------------
 
 def build_detailed_sheet(
@@ -268,14 +328,13 @@ def build_detailed_sheet(
     if detailed.empty:
         return detailed
 
-    detailed = detailed.sort_values([
+    return detailed.sort_values([
 
         "Date",
+        "Service",
         "Campus",
         "Role"
     ])
-
-    return detailed
 
 # -------------------------------------------------
 # MAIN EXPORT
@@ -323,19 +382,17 @@ def build_excel_output(
             if campus_schedule.empty:
                 continue
 
-            sheet_name = campus[:31]
-
             campus_schedule.to_excel(
 
                 writer,
 
-                sheet_name=sheet_name,
+                sheet_name=campus,
 
                 index=False
             )
 
             worksheet = writer.sheets[
-                sheet_name
+                campus
             ]
 
             format_schedule_sheet(
@@ -347,6 +404,43 @@ def build_excel_output(
             autosize_worksheet(
                 worksheet,
                 campus_schedule
+            )
+
+        # =========================================
+        # PRAYER SHEET
+        # =========================================
+
+        prayer_schedule = (
+            build_prayer_schedule(
+                assignments,
+                date_order
+            )
+        )
+
+        if not prayer_schedule.empty:
+
+            prayer_schedule.to_excel(
+
+                writer,
+
+                sheet_name="Prayer",
+
+                index=False
+            )
+
+            worksheet = writer.sheets[
+                "Prayer"
+            ]
+
+            format_schedule_sheet(
+                workbook,
+                worksheet,
+                prayer_schedule
+            )
+
+            autosize_worksheet(
+                worksheet,
+                prayer_schedule
             )
 
         # =========================================
@@ -413,52 +507,4 @@ def build_excel_output(
         autosize_worksheet(
             worksheet,
             detailed_sheet
-        )
-
-        # =========================================
-        # METADATA SHEET
-        # =========================================
-
-        metadata = pd.DataFrame({
-
-            "Metric": [
-
-                "Generated Assignments",
-                "Unique Volunteers",
-                "Campuses"
-            ],
-
-            "Value": [
-
-                len(assignments),
-
-                assignments["Person"]
-                .nunique(),
-
-                len(CAMPUSES)
-            ]
-        })
-
-        metadata.to_excel(
-
-            writer,
-
-            sheet_name="Metadata",
-
-            index=False
-        )
-
-        worksheet = writer.sheets[
-            "Metadata"
-        ]
-
-        format_schedule_sheet(
-            workbook,
-            worksheet,
-            metadata
-        )
-
-        autosize_worksheet(
-            worksheet,
-            metadata
         )
