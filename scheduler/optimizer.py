@@ -134,43 +134,69 @@ class Scheduler:
 
         self.service_map = {}
 
+        self.original_column_map = {}
+
+        pattern = re.compile(
+
+            r"^(\d{1,2}\s+[A-Za-z]+)\s*-\s*(Prayer|Services)$"
+
+        )
+
         for c in self.availability_df.columns:
 
             if c == "Name":
                 continue
 
-            if not isinstance(c, str):
-                continue
+            column = str(c).strip()
 
-            column = c.strip()
-
-            # -------------------------------------
-            # MATCH:
-            # 23 May - Prayer
-            # 30 May - Services
-            # -------------------------------------
-
-            match = re.match(
-
-                r"^(\d{1,2}\s+[A-Za-z]+)\s*-\s*(Prayer|Services)$",
-
-                column
-            )
+            match = pattern.match(column)
 
             if not match:
                 continue
 
-            service_part = match.group(2)
+            # -------------------------------------
+            # EXTRACT DATE
+            # -------------------------------------
 
-            self.date_columns.append(column)
+            extracted_date = match.group(1).strip()
 
-            if service_part == "Services":
+            # -------------------------------------
+            # EXTRACT SERVICE TYPE
+            # -------------------------------------
 
-                self.service_map[column] = "Sunday"
+            extracted_service = match.group(2).strip()
+
+            # -------------------------------------
+            # STORE DATE
+            # -------------------------------------
+
+            self.date_columns.append(
+                extracted_date
+            )
+
+            # -------------------------------------
+            # MAP SERVICE TYPE
+            # -------------------------------------
+
+            if extracted_service == "Services":
+
+                self.service_map[
+                    extracted_date
+                ] = "Sunday"
 
             else:
 
-                self.service_map[column] = service_part
+                self.service_map[
+                    extracted_date
+                ] = "Prayer"
+
+            # -------------------------------------
+            # MAP ORIGINAL COLUMN
+            # -------------------------------------
+
+            self.original_column_map[
+                extracted_date
+            ] = column
 
         # -----------------------------------------
         # SKILLS MATRIX
@@ -253,12 +279,21 @@ class Scheduler:
 
     def available_people(self, date):
 
-        if date not in self.availability_df.columns:
+        original_column = (
+            self.original_column_map.get(date)
+        )
+
+        if not original_column:
+            return []
+
+        if original_column not in self.availability_df.columns:
             return []
 
         rows = self.availability_df[
 
-            self.availability_df[date]
+            self.availability_df[
+                original_column
+            ]
             .astype(str)
             .str.lower()
             .isin([
@@ -787,7 +822,10 @@ class Scheduler:
             "schedule": self.schedule,
 
             "target_assignments":
-                self.target_assignments
+                self.target_assignments,
+
+            "date_order":
+                self.date_columns
         }
 
 # -------------------------------------------------
