@@ -112,37 +112,31 @@ class CandidateScorer:
     # ELITE PENALTY
     # -------------------------------------------------
 
-    def elite_penalty(
-        self,
-        person
-    ):
+    def elite_penalty(self, person):
 
-        try:
+    try:
 
-            numeric_values = pd.to_numeric(
-                self.skills_matrix.loc[person],
-                errors="coerce"
-            )
+        numeric_values = pd.to_numeric(
+            self.skills_matrix.loc[person],
+            errors="coerce"
+        )
 
-            avg_skill = numeric_values.mean()
+        avg_skill = numeric_values.mean()
 
-            if pd.isna(avg_skill):
-                return 0
-
-            if avg_skill >= 2.5:
-
-                return (
-                    self.assignments_count[
-                        person
-                    ] *
-                    ELITE_PENALTY_WEIGHT
-                )
-
-        except:
-
+        if pd.isna(avg_skill):
             return 0
 
+        if avg_skill >= 2.5:
+
+            return (
+                self.assignments_count[person]
+                * ELITE_PENALTY_WEIGHT
+            )
+
+    except:
         return 0
+
+    return 0
 
     # -------------------------------------------------
     # FREE SUNDAY PENALTY
