@@ -103,9 +103,13 @@ class Scheduler:
 
         self.availability_df = availability_df.fillna(0)
 
-        self.people = self.skills_df["Name"].tolist()
+        self.people = self.skills_df[
+            "Name"
+        ].tolist()
 
         self.assignments = []
+
+        self.logs = []
 
         self.schedule = defaultdict(dict)
 
@@ -143,7 +147,7 @@ class Scheduler:
         self.skills_matrix = self.build_skill_matrix()
 
         # -----------------------------------------
-        # TARGET FAIRNESS
+        # TARGET ASSIGNMENTS
         # -----------------------------------------
 
         self.target_assignments = (
@@ -161,6 +165,16 @@ class Scheduler:
             self.target_assignments,
             self.skills_matrix
         )
+
+    # -------------------------------------------------
+    # LOGGER
+    # -------------------------------------------------
+
+    def log(self, message):
+
+        print(message)
+
+        self.logs.append(message)
 
     # -------------------------------------------------
     # SKILL MATRIX
@@ -322,7 +336,9 @@ class Scheduler:
 
         role_type = role_config["type"]
 
-        available = self.available_people(date)
+        available = self.available_people(
+            date
+        )
 
         candidates = []
 
@@ -346,7 +362,9 @@ class Scheduler:
                     campus
                 )
 
-                if skill < role_config["min_skill"]:
+                if skill < role_config[
+                    "min_skill"
+                ]:
                     continue
 
             # -------------------------------------
@@ -430,6 +448,14 @@ class Scheduler:
         # -----------------------------------------
 
         if not candidates:
+
+            self.log(
+                f"WARNING: No candidates "
+                f"for {role} "
+                f"at {campus} "
+                f"on {date}"
+            )
+
             return
 
         # -----------------------------------------
@@ -497,17 +523,51 @@ class Scheduler:
             "Score": round(best_score, 2)
         })
 
+        # -----------------------------------------
+        # LOG SUCCESS
+        # -----------------------------------------
+
+        self.log(
+            f"Assigned {best_person} "
+            f"to {role} "
+            f"at {campus} "
+            f"on {date}"
+        )
+
     # -------------------------------------------------
     # GENERATE SCHEDULE
     # -------------------------------------------------
 
-    def generate(self):
+    def generate(
+        self,
+        progress_callback=None
+    ):
+
+        self.log(
+            "Starting schedule generation..."
+        )
+
+        total_steps = (
+            len(self.date_columns) *
+            len(CAMPUSES) *
+            3
+        )
+
+        current_step = 0
 
         for date in self.date_columns:
+
+            self.log(
+                f"Processing date: {date}"
+            )
 
             service_type = "Sunday"
 
             for campus in CAMPUSES:
+
+                self.log(
+                    f"Scheduling campus: {campus}"
+                )
 
                 used_people = set()
 
@@ -515,11 +575,26 @@ class Scheduler:
                 # PASS 1 — DIRECTORS
                 # ---------------------------------
 
+                current_step += 1
+
+                if progress_callback:
+
+                    progress_callback(
+                        current_step / total_steps,
+                        f"{date} | {campus} | Directors"
+                    )
+
+                self.log(
+                    f"{date} | {campus} | PASS 1 Directors"
+                )
+
                 for role_config in SERVICE_CONFIG[
                     service_type
                 ]:
 
-                    if role_config["type"] != "director":
+                    if role_config[
+                        "type"
+                    ] != "director":
                         continue
 
                     for _ in range(
@@ -538,11 +613,26 @@ class Scheduler:
                 # PASS 2 — MAIN
                 # ---------------------------------
 
+                current_step += 1
+
+                if progress_callback:
+
+                    progress_callback(
+                        current_step / total_steps,
+                        f"{date} | {campus} | Main Roles"
+                    )
+
+                self.log(
+                    f"{date} | {campus} | PASS 2 Main Roles"
+                )
+
                 for role_config in SERVICE_CONFIG[
                     service_type
                 ]:
 
-                    if role_config["type"] != "main":
+                    if role_config[
+                        "type"
+                    ] != "main":
                         continue
 
                     for _ in range(
@@ -561,11 +651,26 @@ class Scheduler:
                 # PASS 3 — ASSISTANTS
                 # ---------------------------------
 
+                current_step += 1
+
+                if progress_callback:
+
+                    progress_callback(
+                        current_step / total_steps,
+                        f"{date} | {campus} | Assistants"
+                    )
+
+                self.log(
+                    f"{date} | {campus} | PASS 3 Assistants"
+                )
+
                 for role_config in SERVICE_CONFIG[
                     service_type
                 ]:
 
-                    if role_config["type"] != "assistant":
+                    if role_config[
+                        "type"
+                    ] != "assistant":
                         continue
 
                     for _ in range(
@@ -584,11 +689,19 @@ class Scheduler:
         # REPAIR PASS
         # -----------------------------------------
 
+        self.log(
+            "Starting repair pass..."
+        )
+
         repair_schedule(
             self.schedule,
             self.skills_df,
             self.availability_df,
             self.assignments
+        )
+
+        self.log(
+            "Repair pass complete."
         )
 
         return self.build_result()
@@ -661,7 +774,9 @@ class Scheduler:
             "schedule": self.schedule,
 
             "target_assignments":
-                self.target_assignments
+                self.target_assignments,
+
+            "logs": self.logs
         }
 
 
@@ -671,7 +786,8 @@ class Scheduler:
 
 def generate_schedule(
     skills_df,
-    availability_df
+    availability_df,
+    progress_callback=None
 ):
 
     scheduler = Scheduler(
@@ -679,4 +795,6 @@ def generate_schedule(
         availability_df
     )
 
-    return scheduler.generate()
+    return scheduler.generate(
+        progress_callback=progress_callback
+    )
