@@ -137,9 +137,7 @@ class Scheduler:
         self.original_column_map = {}
 
         pattern = re.compile(
-
             r"^(\d{1,2}\s+[A-Za-z]+)\s*-\s*(Prayer|Services)$"
-
         )
 
         for c in self.availability_df.columns:
@@ -154,25 +152,19 @@ class Scheduler:
             if not match:
                 continue
 
-            # -------------------------------------
-            # EXTRACT DATE
-            # -------------------------------------
-
             extracted_date = match.group(1).strip()
-
-            # -------------------------------------
-            # EXTRACT SERVICE TYPE
-            # -------------------------------------
 
             extracted_service = match.group(2).strip()
 
             # -------------------------------------
-            # STORE DATE
+            # PREVENT DUPLICATES
             # -------------------------------------
 
-            self.date_columns.append(
-                extracted_date
-            )
+            if extracted_date not in self.date_columns:
+
+                self.date_columns.append(
+                    extracted_date
+                )
 
             # -------------------------------------
             # MAP SERVICE TYPE
@@ -258,10 +250,16 @@ class Scheduler:
                 for r in roles
             )
 
-            total_slots += (
-                role_count *
-                len(CAMPUSES)
-            )
+            if service_type == "Prayer":
+
+                total_slots += role_count
+
+            else:
+
+                total_slots += (
+                    role_count *
+                    len(CAMPUSES)
+                )
 
         people_count = max(
             1,
@@ -317,6 +315,52 @@ class Scheduler:
         role,
         campus
     ):
+
+        # -----------------------------------------
+        # PRAYER NIGHT
+        # -----------------------------------------
+
+        if campus == "Prayer":
+
+            if role == "Runner":
+                return 1
+
+            if role == "Sound Assistant":
+
+                role = "Sound"
+
+            prayer_cols = [
+
+                c for c in self.skills_matrix.columns
+
+                if c.startswith("Sound_")
+            ]
+
+            if not prayer_cols:
+                return 0
+
+            values = []
+
+            for col in prayer_cols:
+
+                try:
+
+                    values.append(
+                        float(
+                            self.skills_matrix.loc[
+                                person,
+                                col
+                            ]
+                        )
+                    )
+
+                except:
+                    continue
+
+            if not values:
+                return 0
+
+            return max(values)
 
         # -----------------------------------------
         # DIRECTOR SPECIAL CASE
@@ -621,9 +665,7 @@ class Scheduler:
     ):
 
         total_steps = (
-            len(self.date_columns) *
-            len(CAMPUSES) *
-            3
+            len(self.date_columns) * 3
         )
 
         current_step = 0
@@ -635,31 +677,28 @@ class Scheduler:
                 "Sunday"
             )
 
-            for campus in CAMPUSES:
+            # =====================================
+            # PRAYER NIGHT
+            # =====================================
+
+            if service_type == "Prayer":
+
+                campus = "Prayer"
 
                 used_people = set()
 
-                # ---------------------------------
-                # PASS 1 — DIRECTORS
-                # ---------------------------------
-
                 current_step += 1
 
                 if progress_callback:
 
                     progress_callback(
                         current_step / total_steps,
-                        f"{date} | {campus} | Directors"
+                        f"{date} | Prayer"
                     )
 
                 for role_config in SERVICE_CONFIG[
-                    service_type
+                    "Prayer"
                 ]:
-
-                    if role_config[
-                        "type"
-                    ] != "director":
-                        continue
 
                     for _ in range(
                         role_config["count"]
@@ -670,80 +709,124 @@ class Scheduler:
                             campus,
                             role_config,
                             used_people,
-                            service_type
+                            "Prayer"
                         )
 
-                # ---------------------------------
-                # PASS 2 — MAIN
-                # ---------------------------------
+            # =====================================
+            # SUNDAY SERVICES
+            # =====================================
 
-                current_step += 1
+            else:
 
-                if progress_callback:
+                for campus in CAMPUSES:
 
-                    progress_callback(
-                        current_step / total_steps,
-                        f"{date} | {campus} | Main Roles"
-                    )
+                    used_people = set()
 
-                for role_config in SERVICE_CONFIG[
-                    service_type
-                ]:
+                    # -----------------------------
+                    # PASS 1 — DIRECTORS
+                    # -----------------------------
 
-                    if role_config[
-                        "type"
-                    ] != "main":
-                        continue
+                    current_step += 1
 
-                    for _ in range(
-                        role_config["count"]
-                    ):
+                    if progress_callback:
 
-                        self.assign_role(
-                            date,
-                            campus,
-                            role_config,
-                            used_people,
-                            service_type
+                        progress_callback(
+                            current_step / total_steps,
+                            f"{date} | {campus} | Directors"
                         )
 
-                # ---------------------------------
-                # PASS 3 — ASSISTANTS
-                # ---------------------------------
+                    for role_config in SERVICE_CONFIG[
+                        "Sunday"
+                    ]:
 
-                current_step += 1
+                        if role_config[
+                            "type"
+                        ] != "director":
+                            continue
 
-                if progress_callback:
+                        for _ in range(
+                            role_config["count"]
+                        ):
 
-                    progress_callback(
-                        current_step / total_steps,
-                        f"{date} | {campus} | Assistants"
-                    )
+                            self.assign_role(
+                                date,
+                                campus,
+                                role_config,
+                                used_people,
+                                "Sunday"
+                            )
 
-                for role_config in SERVICE_CONFIG[
-                    service_type
-                ]:
+                    # -----------------------------
+                    # PASS 2 — MAIN
+                    # -----------------------------
 
-                    if role_config[
-                        "type"
-                    ] != "assistant":
-                        continue
+                    current_step += 1
 
-                    for _ in range(
-                        role_config["count"]
-                    ):
+                    if progress_callback:
 
-                        self.assign_role(
-                            date,
-                            campus,
-                            role_config,
-                            used_people,
-                            service_type
+                        progress_callback(
+                            current_step / total_steps,
+                            f"{date} | {campus} | Main Roles"
                         )
 
-        # -----------------------------------------
+                    for role_config in SERVICE_CONFIG[
+                        "Sunday"
+                    ]:
+
+                        if role_config[
+                            "type"
+                        ] != "main":
+                            continue
+
+                        for _ in range(
+                            role_config["count"]
+                        ):
+
+                            self.assign_role(
+                                date,
+                                campus,
+                                role_config,
+                                used_people,
+                                "Sunday"
+                            )
+
+                    # -----------------------------
+                    # PASS 3 — ASSISTANTS
+                    # -----------------------------
+
+                    current_step += 1
+
+                    if progress_callback:
+
+                        progress_callback(
+                            current_step / total_steps,
+                            f"{date} | {campus} | Assistants"
+                        )
+
+                    for role_config in SERVICE_CONFIG[
+                        "Sunday"
+                    ]:
+
+                        if role_config[
+                            "type"
+                        ] != "assistant":
+                            continue
+
+                        for _ in range(
+                            role_config["count"]
+                        ):
+
+                            self.assign_role(
+                                date,
+                                campus,
+                                role_config,
+                                used_people,
+                                "Sunday"
+                            )
+
+        # =========================================
         # REPAIR PASS
-        # -----------------------------------------
+        # =========================================
 
         repair_schedule(
             self.schedule,
