@@ -1,107 +1,218 @@
+import numpy as np
 import pandas as pd
 
 
-def load_dataframe(uploaded_file):
+def build_metrics(schedule_result):
 
-    """
-    Load CSV, XLSX, or ODS files into a pandas DataFrame.
-    """
+    assignments = schedule_result.get(
+        "assignments",
+        pd.DataFrame()
+    )
 
-    ext = uploaded_file.name.split(".")[-1].lower()
-
-    # -------------------------------------------------
-    # CSV
-    # -------------------------------------------------
-
-    if ext == "csv":
-
-        df = pd.read_csv(
-            uploaded_file
-        )
-
-    # -------------------------------------------------
-    # EXCEL
-    # -------------------------------------------------
-
-    elif ext in ["xlsx", "xls"]:
-
-        df = pd.read_excel(
-            uploaded_file
-        )
-
-    # -------------------------------------------------
-    # ODS
-    # -------------------------------------------------
-
-    elif ext == "ods":
-
-        df = pd.read_excel(
-            uploaded_file,
-            engine="odf"
-        )
-
-    # -------------------------------------------------
-    # INVALID TYPE
-    # -------------------------------------------------
-
-    else:
-
-        raise ValueError(
-            f"Unsupported file type: {ext}"
-        )
-
-    # -------------------------------------------------
-    # CLEAN COLUMN NAMES
-    # -------------------------------------------------
-
-    df.columns = [
-        str(c).strip()
-        for c in df.columns
-    ]
-
-    # -------------------------------------------------
-    # CLEAN NAME COLUMN
-    # -------------------------------------------------
-
-    if "Name" in df.columns:
-
-        df["Name"] = (
-            df["Name"]
-            .astype(str)
-            .str.strip()
-        )
-
-    # -------------------------------------------------
-    # REMOVE EMPTY ROWS
-    # -------------------------------------------------
-
-    df = df.dropna(
-        how="all"
+    summary = schedule_result.get(
+        "summary",
+        pd.DataFrame()
     )
 
     # -------------------------------------------------
-    # REPLACE NaN VALUES
+    # EMPTY SAFETY
     # -------------------------------------------------
 
-    df = df.fillna(0)
+    if assignments.empty:
+
+        return {
+            "coverage_rate": 0,
+            "unfilled_roles": 0,
+            "fairness_std_dev": 0,
+            "avg_skill_score": 0,
+            "total_assignments": 0,
+            "unique_volunteers": 0,
+            "assistant_assignments": 0
+        }
 
     # -------------------------------------------------
-    # CLEAN NUMERIC COLUMNS
+    # TOTAL ASSIGNMENTS
     # -------------------------------------------------
 
-    for col in df.columns:
+    total_assignments = len(assignments)
 
-        if col == "Name":
-            continue
+    # -------------------------------------------------
+    # UNIQUE VOLUNTEERS
+    # -------------------------------------------------
 
-        try:
+    unique_volunteers = assignments[
+        "Person"
+    ].nunique()
 
-            df[col] = pd.to_numeric(
-                df[col],
-                errors="ignore"
+    # -------------------------------------------------
+    # AVERAGE SKILL SCORE
+    # -------------------------------------------------
+
+    if "Skill" in assignments.columns:
+
+        avg_skill_score = round(
+            pd.to_numeric(
+                assignments["Skill"],
+                errors="coerce"
+            ).mean(),
+            2
+        )
+
+    else:
+
+        avg_skill_score = 0
+
+    # -------------------------------------------------
+    # FAIRNESS STD DEV
+    # -------------------------------------------------
+
+    volunteer_counts = assignments.groupby(
+        "Person"
+    ).size()
+
+    fairness_std_dev = round(
+        np.std(volunteer_counts),
+        2
+    )
+
+    # -------------------------------------------------
+    # ASSISTANT COUNT
+    # -------------------------------------------------
+
+    assistant_assignments = len(
+        assignments[
+            assignments["Role"]
+            .astype(str)
+            .str.contains(
+                "Assistant",
+                case=False,
+                na=False
+            )
+        ]
+    )
+
+    # -------------------------------------------------
+    # COVERAGE RATE
+    # -------------------------------------------------
+
+    required_roles_per_campus = 5
+
+    campuses = assignments[
+        "Campus"
+    ].nunique()
+
+    dates = assignments[
+        "Date"
+    ].nunique()
+
+    expected_assignments = (
+        required_roles_per_campus *
+        campuses *
+        dates
+    )
+
+    if expected_assignments == 0:
+
+        coverage_rate = 0
+
+    else:
+
+        coverage_rate = round(
+            (
+                total_assignments /
+                expected_assignments
+            ) * 100,
+            1
+        )
+
+    # -------------------------------------------------
+    # UNFILLED ROLES
+    # -------------------------------------------------
+
+    unfilled_roles = max(
+        0,
+        expected_assignments -
+        total_assignments
+    )
+
+    # -------------------------------------------------
+    # FREE SUNDAY METRIC
+    # -------------------------------------------------
+
+    free_sunday_count = 0
+
+    if not summary.empty:
+
+        if "Total Assignments" in summary.columns:
+
+            max_assignments = summary[
+                "Total Assignments"
+            ].max()
+
+            free_sunday_count = len(
+                summary[
+                    summary["Total Assignments"]
+                    < max_assignments
+                ]
             )
 
-        except:
-            pass
+    # -------------------------------------------------
+    # CAMPUS BALANCE
+    # -------------------------------------------------
 
-    return df
+    campus_balance_score = 0
+
+    campus_columns = [
+        c for c in summary.columns
+        if c in [
+            "Tygerberg",
+            "Stellies",
+            "Paarl"
+        ]
+    ]
+
+    if campus_columns:
+
+        campus_totals = summary[
+            campus_columns
+        ].sum()
+
+        campus_balance_score = round(
+            np.std(campus_totals),
+            2
+        )
+
+    # -------------------------------------------------
+    # RETURN METRICS
+    # -------------------------------------------------
+
+    return {
+
+        "coverage_rate": coverage_rate,
+
+        "unfilled_roles": int(
+            unfilled_roles
+        ),
+
+        "fairness_std_dev": fairness_std_dev,
+
+        "avg_skill_score": avg_skill_score,
+
+        "total_assignments": int(
+            total_assignments
+        ),
+
+        "unique_volunteers": int(
+            unique_volunteers
+        ),
+
+        "assistant_assignments": int(
+            assistant_assignments
+        ),
+
+        "free_sunday_count": int(
+            free_sunday_count
+        ),
+
+        "campus_balance_score": campus_balance_score
+    }
