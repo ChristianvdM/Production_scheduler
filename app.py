@@ -121,49 +121,116 @@ if skills_file and availability_file:
 
     try:
 
-        with st.spinner(
-            "Generating optimized schedule..."
+        # -------------------------------------------
+        # RUNTIME UI
+        # -------------------------------------------
+
+        progress_bar = st.progress(0)
+
+        status_text = st.empty()
+
+        log_container = st.empty()
+
+        runtime_logs = []
+
+        def update_progress(
+            progress,
+            message
         ):
 
-            # ---------------------------------------
-            # LOAD DATA
-            # ---------------------------------------
-
-            skills_df = load_dataframe(
-                skills_file
+            progress_bar.progress(
+                min(progress, 1.0)
             )
 
-            availability_df = load_dataframe(
-                availability_file
+            status_text.info(
+                f"⚙️ {message}"
             )
 
-            # ---------------------------------------
-            # BUILD SCHEDULE
-            # ---------------------------------------
+        def add_runtime_log(message):
 
-            schedule_result = generate_schedule(
-                skills_df,
-                availability_df
+            runtime_logs.append(message)
+
+            last_logs = runtime_logs[-15:]
+
+            log_container.code(
+                "\n".join(last_logs),
+                language="text"
             )
 
-            # ---------------------------------------
-            # EXPORT EXCEL
-            # ---------------------------------------
+        # -------------------------------------------
+        # START
+        # -------------------------------------------
 
-            output = BytesIO()
+        add_runtime_log(
+            "Loading spreadsheets..."
+        )
 
-            build_excel_output(
-                schedule_result,
-                output
-            )
+        skills_df = load_dataframe(
+            skills_file
+        )
 
-            # ---------------------------------------
-            # METRICS
-            # ---------------------------------------
+        availability_df = load_dataframe(
+            availability_file
+        )
 
-            metrics = build_metrics(
-                schedule_result
-            )
+        add_runtime_log(
+            "Files loaded successfully."
+        )
+
+        # -------------------------------------------
+        # GENERATE
+        # -------------------------------------------
+
+        add_runtime_log(
+            "Starting optimization..."
+        )
+
+        schedule_result = generate_schedule(
+            skills_df,
+            availability_df,
+            progress_callback=update_progress
+        )
+
+        add_runtime_log(
+            "Optimization complete."
+        )
+
+        # -------------------------------------------
+        # EXPORT
+        # -------------------------------------------
+
+        add_runtime_log(
+            "Building Excel export..."
+        )
+
+        output = BytesIO()
+
+        build_excel_output(
+            schedule_result,
+            output
+        )
+
+        add_runtime_log(
+            "Excel export complete."
+        )
+
+        # -------------------------------------------
+        # METRICS
+        # -------------------------------------------
+
+        metrics = build_metrics(
+            schedule_result
+        )
+
+        progress_bar.progress(1.0)
+
+        status_text.success(
+            "✅ Schedule generation complete"
+        )
+
+        add_runtime_log(
+            "Schedule generation completed successfully."
+        )
 
         # -------------------------------------------
         # SUCCESS
@@ -203,7 +270,9 @@ if skills_file and availability_file:
         # SUMMARY TABLE
         # -------------------------------------------
 
-        st.markdown("## 📊 Assignment Summary")
+        st.markdown(
+            "## 📊 Assignment Summary"
+        )
 
         st.dataframe(
             schedule_result["summary"],
@@ -211,10 +280,12 @@ if skills_file and availability_file:
         )
 
         # -------------------------------------------
-        # ASSIGNMENT TABLE
+        # ASSIGNMENTS TABLE
         # -------------------------------------------
 
-        st.markdown("## 🗓 Full Assignments")
+        st.markdown(
+            "## 🗓 Full Assignments"
+        )
 
         st.dataframe(
             schedule_result["assignments"],
@@ -222,7 +293,24 @@ if skills_file and availability_file:
         )
 
         # -------------------------------------------
-        # DOWNLOAD BUTTON
+        # INTERNAL SCHEDULER LOGS
+        # -------------------------------------------
+
+        if "logs" in schedule_result:
+
+            st.markdown(
+                "## 🧠 Scheduler Logs"
+            )
+
+            st.code(
+                "\n".join(
+                    schedule_result["logs"]
+                ),
+                language="text"
+            )
+
+        # -------------------------------------------
+        # DOWNLOAD
         # -------------------------------------------
 
         st.download_button(
@@ -238,6 +326,8 @@ if skills_file and availability_file:
 
     except Exception as e:
 
-        st.error("❌ Scheduler Error")
+        st.error(
+            "❌ Scheduler Error"
+        )
 
         st.exception(e)
