@@ -507,6 +507,10 @@ class Scheduler:
 
         for person in available:
 
+            # -------------------------------------
+            # GLOBAL DAILY LOCK
+            # -------------------------------------
+
             if person in used_people:
                 continue
 
@@ -734,14 +738,18 @@ class Scheduler:
             )
 
             # =====================================
+            # GLOBAL DAILY LOCK
+            # =====================================
+
+            daily_used_people = set()
+
+            # =====================================
             # PRAYER NIGHT
             # =====================================
 
             if service_type == "Prayer":
 
                 campus = "Prayer"
-
-                used_people = set()
 
                 current_step += 1
 
@@ -764,7 +772,7 @@ class Scheduler:
                             date,
                             campus,
                             role_config,
-                            used_people,
+                            daily_used_people,
                             "Prayer"
                         )
 
@@ -775,8 +783,6 @@ class Scheduler:
             else:
 
                 for campus in CAMPUSES:
-
-                    used_people = set()
 
                     # -----------------------------
                     # PASS 1 — DIRECTORS
@@ -808,7 +814,7 @@ class Scheduler:
                                 date,
                                 campus,
                                 role_config,
-                                used_people,
+                                daily_used_people,
                                 "Sunday"
                             )
 
@@ -842,7 +848,7 @@ class Scheduler:
                                 date,
                                 campus,
                                 role_config,
-                                used_people,
+                                daily_used_people,
                                 "Sunday"
                             )
 
@@ -876,7 +882,7 @@ class Scheduler:
                                 date,
                                 campus,
                                 role_config,
-                                used_people,
+                                daily_used_people,
                                 "Sunday"
                             )
 
