@@ -8,10 +8,18 @@ from scheduler.optimizer import generate_schedule
 from scheduler.exports import build_excel_output
 from scheduler.metrics import build_metrics
 
+# ---------------------------------------------------
+# PAGE CONFIG
+# ---------------------------------------------------
+
 st.set_page_config(
     page_title="CPT Production Team Scheduler",
     layout="wide"
 )
+
+# ---------------------------------------------------
+# DARK THEME
+# ---------------------------------------------------
 
 st.markdown(
     """
@@ -30,38 +38,70 @@ st.markdown(
             background-color: #444;
             color: white;
         }
+
+        .stMetric {
+            background-color: #111;
+            padding: 15px;
+            border-radius: 10px;
+        }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Logo
+# ---------------------------------------------------
+# LOGO
+# ---------------------------------------------------
+
 try:
+
     with open("assets/image.png", "rb") as img_file:
-        encoded = base64.b64encode(img_file.read()).decode()
+
+        encoded = base64.b64encode(
+            img_file.read()
+        ).decode()
 
         st.markdown(
             f"""
-            <div style='text-align: center;'>
-                <img src='data:image/png;base64,{encoded}' width='600'>
+            <div style='text-align: center; margin-bottom: 20px;'>
+                <img
+                    src='data:image/png;base64,{encoded}'
+                    width='500'
+                >
             </div>
             """,
             unsafe_allow_html=True
         )
 
 except FileNotFoundError:
-    st.warning("Logo not found")
+
+    st.warning(
+        "Logo not found. Place image.png inside assets/"
+    )
+
+# ---------------------------------------------------
+# TITLE
+# ---------------------------------------------------
 
 st.title("📅 CPT Production Team Scheduler")
 
 st.markdown(
     """
-Upload:
+    Upload your:
 
-- Skills File (.ods / .xlsx / .csv)
-- Availability File (.ods / .xlsx / .csv)
-"""
+    - Skills spreadsheet
+    - Availability spreadsheet
+
+    Supported formats:
+    - CSV
+    - XLSX
+    - ODS
+    """
 )
+
+# ---------------------------------------------------
+# FILE UPLOADERS
+# ---------------------------------------------------
 
 skills_file = st.file_uploader(
     "Upload Skills File",
@@ -73,60 +113,131 @@ availability_file = st.file_uploader(
     type=["csv", "xlsx", "ods"]
 )
 
+# ---------------------------------------------------
+# GENERATE SCHEDULE
+# ---------------------------------------------------
+
 if skills_file and availability_file:
 
-    with st.spinner("Generating optimized schedule..."):
+    try:
 
-        skills_df = load_dataframe(skills_file)
-        availability_df = load_dataframe(availability_file)
+        with st.spinner(
+            "Generating optimized schedule..."
+        ):
 
-        schedule_result = generate_schedule(
-            skills_df,
-            availability_df
+            # ---------------------------------------
+            # LOAD DATA
+            # ---------------------------------------
+
+            skills_df = load_dataframe(
+                skills_file
+            )
+
+            availability_df = load_dataframe(
+                availability_file
+            )
+
+            # ---------------------------------------
+            # BUILD SCHEDULE
+            # ---------------------------------------
+
+            schedule_result = generate_schedule(
+                skills_df,
+                availability_df
+            )
+
+            # ---------------------------------------
+            # EXPORT EXCEL
+            # ---------------------------------------
+
+            output = BytesIO()
+
+            build_excel_output(
+                schedule_result,
+                output
+            )
+
+            # ---------------------------------------
+            # METRICS
+            # ---------------------------------------
+
+            metrics = build_metrics(
+                schedule_result
+            )
+
+        # -------------------------------------------
+        # SUCCESS
+        # -------------------------------------------
+
+        st.success(
+            "✅ Schedule generated successfully"
         )
 
-        output = BytesIO()
+        # -------------------------------------------
+        # METRICS DISPLAY
+        # -------------------------------------------
 
-        build_excel_output(
-            schedule_result,
-            output
+        col1, col2, col3, col4 = st.columns(4)
+
+        col1.metric(
+            "Coverage Rate",
+            f"{metrics['coverage_rate']}%"
         )
 
-        metrics = build_metrics(schedule_result)
+        col2.metric(
+            "Unfilled Roles",
+            metrics['unfilled_roles']
+        )
 
-    st.success("✅ Schedule generated successfully")
+        col3.metric(
+            "Fairness Std Dev",
+            metrics['fairness_std_dev']
+        )
 
-    col1, col2, col3, col4 = st.columns(4)
+        col4.metric(
+            "Average Skill Score",
+            metrics['avg_skill_score']
+        )
 
-    col1.metric(
-        "Coverage Rate",
-        f"{metrics['coverage_rate']}%"
-    )
+        # -------------------------------------------
+        # SUMMARY TABLE
+        # -------------------------------------------
 
-    col2.metric(
-        "Unfilled Roles",
-        metrics['unfilled_roles']
-    )
+        st.markdown("## 📊 Assignment Summary")
 
-    col3.metric(
-        "Fairness Std Dev",
-        metrics['fairness_std_dev']
-    )
+        st.dataframe(
+            schedule_result["summary"],
+            use_container_width=True
+        )
 
-    col4.metric(
-        "Average Skill Score",
-        metrics['avg_skill_score']
-    )
+        # -------------------------------------------
+        # ASSIGNMENT TABLE
+        # -------------------------------------------
 
-    st.markdown("## Assignment Summary")
-    st.dataframe(schedule_result['summary'])
+        st.markdown("## 🗓 Full Assignments")
 
-    st.markdown("## Schedule Preview")
-    st.dataframe(schedule_result['assignments'].head(50))
+        st.dataframe(
+            schedule_result["assignments"],
+            use_container_width=True
+        )
 
-    st.download_button(
-        "📥 Download Schedule",
-        data=output.getvalue(),
-        file_name="production_schedule.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        # -------------------------------------------
+        # DOWNLOAD BUTTON
+        # -------------------------------------------
+
+        st.download_button(
+            label="📥 Download Excel Schedule",
+            data=output.getvalue(),
+            file_name="production_schedule.xlsx",
+            mime=(
+                "application/"
+                "vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            )
+        )
+
+    except Exception as e:
+
+        st.error("❌ Scheduler Error")
+
+        st.exception(e)
