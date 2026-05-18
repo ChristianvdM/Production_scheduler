@@ -1,3 +1,4 @@
+import pandas as pd
 import numpy as np
 
 FAIRNESS_WEIGHT = 5
@@ -82,10 +83,17 @@ class CandidateScorer:
         person
     ):
 
-        avg_skill = (
-            self.skills_matrix.loc[person]
-            .mean()
+        person_row = self.skills_matrix.loc[person]
+
+        numeric_values = pd.to_numeric(
+            person_row,
+            errors="coerce"
         )
+
+        avg_skill = numeric_values.mean()
+
+        if pd.isna(avg_skill):
+            avg_skill = 0
 
         if avg_skill >= 2.5:
 
