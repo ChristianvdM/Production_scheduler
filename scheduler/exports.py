@@ -201,15 +201,6 @@ def build_prayer_schedule(
     if prayer_df.empty:
         return pd.DataFrame()
 
-    role_order = [
-
-        "Sound",
-
-        "Sound Assistant",
-
-        "Runner"
-    ]
-
     prayer_df["Role_Display"] = prayer_df.groupby(
         ["Date", "Role"]
     ).cumcount() + 1
@@ -250,6 +241,8 @@ def build_prayer_schedule(
     )
 
     desired_order = [
+
+        "Director",
 
         "Sound",
 
@@ -299,9 +292,7 @@ def build_summary_sheet(
 
         "Prayer",
 
-        "Target Assignments",
-
-        "Fairness Delta"
+        "Target Assignments"
     ]
 
     existing = [
@@ -327,6 +318,12 @@ def build_detailed_sheet(
 
     if detailed.empty:
         return detailed
+
+    if "Score" in detailed.columns:
+
+        detailed = detailed.drop(
+            columns=["Score"]
+        )
 
     return detailed.sort_values([
 
