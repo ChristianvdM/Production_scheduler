@@ -235,6 +235,32 @@ class Scheduler:
         campus
     ):
 
+        # -----------------------------------------
+        # DIRECTOR SPECIAL CASE
+        # -----------------------------------------
+
+        if role == "Director":
+
+            if "Director" not in self.skills_matrix.columns:
+                return 0
+
+            try:
+
+                value = self.skills_matrix.loc[
+                    person,
+                    "Director"
+                ]
+
+                return float(value)
+
+            except:
+
+                return 0
+
+        # -----------------------------------------
+        # NORMAL CAMPUS ROLES
+        # -----------------------------------------
+
         col = f"{role}_{campus}"
 
         if col not in self.skills_matrix.columns:
