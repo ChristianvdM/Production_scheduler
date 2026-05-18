@@ -582,6 +582,8 @@ class Scheduler:
 
             if role == "Director":
 
+                # General balancing
+
                 score -= (
 
                     self.director_campus_history[
@@ -589,11 +591,23 @@ class Scheduler:
                     ][campus] * 25
                 )
 
-                if self.last_director_campus.get(
-                    person
-                ) == campus:
+                # Prevent same campus two weeks in a row
 
-                    score -= 40
+                last_assignment = (
+                    self.last_director_campus.get(
+                        person
+                    )
+                )
+
+                if last_assignment:
+
+                    last_campus = last_assignment[
+                        "campus"
+                    ]
+
+                    if last_campus == campus:
+
+                        score -= 1000
 
             # -------------------------------------
             # ASSISTANT FAIRNESS
@@ -688,7 +702,12 @@ class Scheduler:
 
             self.last_director_campus[
                 best_person
-            ] = campus
+            ] = {
+
+                "date": date,
+
+                "campus": campus
+            }
 
         # -----------------------------------------
         # STORE ASSIGNMENT
@@ -710,9 +729,7 @@ class Scheduler:
 
             "Person": best_person,
 
-            "Skill": best_skill,
-
-            "Score": round(best_score, 2)
+            "Skill": best_skill
         })
 
     # -------------------------------------------------
@@ -934,11 +951,6 @@ class Scheduler:
 
         result["Target Assignments"] = (
             self.target_assignments
-        )
-
-        result["Fairness Delta"] = (
-            result["Total Assignments"] -
-            result["Target Assignments"]
         )
 
         return result.sort_values(
