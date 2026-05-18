@@ -1,241 +1,107 @@
 import pandas as pd
 
-CAMPUSES = [
-    "Tygerberg",
-    "Stellies",
-    "Paarl"
-]
 
+def load_dataframe(uploaded_file):
 
-def autosize_worksheet(worksheet, dataframe):
+    """
+    Load CSV, XLSX, or ODS files into a pandas DataFrame.
+    """
 
-    for idx, col in enumerate(dataframe.columns):
+    ext = uploaded_file.name.split(".")[-1].lower()
+
+    # -------------------------------------------------
+    # CSV
+    # -------------------------------------------------
+
+    if ext == "csv":
+
+        df = pd.read_csv(
+            uploaded_file
+        )
+
+    # -------------------------------------------------
+    # EXCEL
+    # -------------------------------------------------
+
+    elif ext in ["xlsx", "xls"]:
+
+        df = pd.read_excel(
+            uploaded_file
+        )
+
+    # -------------------------------------------------
+    # ODS
+    # -------------------------------------------------
+
+    elif ext == "ods":
+
+        df = pd.read_excel(
+            uploaded_file,
+            engine="odf"
+        )
+
+    # -------------------------------------------------
+    # INVALID TYPE
+    # -------------------------------------------------
+
+    else:
+
+        raise ValueError(
+            f"Unsupported file type: {ext}"
+        )
+
+    # -------------------------------------------------
+    # CLEAN COLUMN NAMES
+    # -------------------------------------------------
+
+    df.columns = [
+        str(c).strip()
+        for c in df.columns
+    ]
+
+    # -------------------------------------------------
+    # CLEAN NAME COLUMN
+    # -------------------------------------------------
+
+    if "Name" in df.columns:
+
+        df["Name"] = (
+            df["Name"]
+            .astype(str)
+            .str.strip()
+        )
+
+    # -------------------------------------------------
+    # REMOVE EMPTY ROWS
+    # -------------------------------------------------
+
+    df = df.dropna(
+        how="all"
+    )
+
+    # -------------------------------------------------
+    # REPLACE NaN VALUES
+    # -------------------------------------------------
+
+    df = df.fillna(0)
+
+    # -------------------------------------------------
+    # CLEAN NUMERIC COLUMNS
+    # -------------------------------------------------
+
+    for col in df.columns:
+
+        if col == "Name":
+            continue
 
         try:
 
-            max_length = max(
-                dataframe[col]
-                .astype(str)
-                .map(len)
-                .max(),
-                len(str(col))
-            ) + 3
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="ignore"
+            )
 
         except:
+            pass
 
-            max_length = 20
-
-        worksheet.set_column(
-            idx,
-            idx,
-            max_length
-        )
-
-
-def build_excel_output(
-    schedule_result,
-    output
-):
-
-    assignments = schedule_result["assignments"]
-
-    summary = schedule_result["summary"]
-
-    with pd.ExcelWriter(
-        output,
-        engine="xlsxwriter"
-    ) as writer:
-
-        # -------------------------------------------------
-        # FULL ASSIGNMENTS
-        # -------------------------------------------------
-
-        assignments.to_excel(
-            writer,
-            sheet_name="Assignments",
-            index=False
-        )
-
-        assignment_sheet = writer.sheets[
-            "Assignments"
-        ]
-
-        autosize_worksheet(
-            assignment_sheet,
-            assignments
-        )
-
-        # -------------------------------------------------
-        # SUMMARY
-        # -------------------------------------------------
-
-        summary.to_excel(
-            writer,
-            sheet_name="Summary",
-            index=False
-        )
-
-        summary_sheet = writer.sheets[
-            "Summary"
-        ]
-
-        autosize_worksheet(
-            summary_sheet,
-            summary
-        )
-
-        # -------------------------------------------------
-        # CAMPUS SHEETS
-        # -------------------------------------------------
-
-        for campus in CAMPUSES:
-
-            campus_df = assignments[
-                assignments["Campus"] == campus
-            ]
-
-            if campus_df.empty:
-                continue
-
-            pivot = campus_df.pivot_table(
-                index="Role",
-                columns="Date",
-                values="Person",
-                aggfunc="first"
-            )
-
-            pivot = pivot.fillna("")
-
-            sheet_name = campus[:31]
-
-            pivot.to_excel(
-                writer,
-                sheet_name=sheet_name
-            )
-
-            worksheet = writer.sheets[sheet_name]
-
-            autosize_worksheet(
-                worksheet,
-                pivot.reset_index()
-            )
-
-        # -------------------------------------------------
-        # SERVICE TYPE SHEETS
-        # -------------------------------------------------
-
-        if "Service" in assignments.columns:
-
-            service_types = assignments[
-                "Service"
-            ].unique()
-
-            for service in service_types:
-
-                service_df = assignments[
-                    assignments["Service"] == service
-                ]
-
-                if service_df.empty:
-                    continue
-
-                service_pivot = service_df.pivot_table(
-                    index=["Campus", "Role"],
-                    columns="Date",
-                    values="Person",
-                    aggfunc="first"
-                )
-
-                service_pivot = service_pivot.fillna("")
-
-                sheet_name = f"{service}_Services"
-
-                sheet_name = sheet_name[:31]
-
-                service_pivot.to_excel(
-                    writer,
-                    sheet_name=sheet_name
-                )
-
-                worksheet = writer.sheets[
-                    sheet_name
-                ]
-
-                autosize_worksheet(
-                    worksheet,
-                    service_pivot.reset_index()
-                )
-
-        # -------------------------------------------------
-        # FAIRNESS REPORT
-        # -------------------------------------------------
-
-        if not summary.empty:
-
-            fairness_columns = [
-                c for c in summary.columns
-                if c in CAMPUSES
-            ]
-
-            fairness_report = summary[
-                [
-                    "Person",
-                    "Total Assignments",
-                    "Target Assignments",
-                    "Fairness Delta"
-                ] + fairness_columns
-            ]
-
-            fairness_report.to_excel(
-                writer,
-                sheet_name="Fairness",
-                index=False
-            )
-
-            worksheet = writer.sheets[
-                "Fairness"
-            ]
-
-            autosize_worksheet(
-                worksheet,
-                fairness_report
-            )
-
-        # -------------------------------------------------
-        # FORMATTING
-        # -------------------------------------------------
-
-        workbook = writer.book
-
-        header_format = workbook.add_format({
-            "bold": True,
-            "bg_color": "#222222",
-            "font_color": "white",
-            "border": 1
-        })
-
-        for sheet_name in writer.sheets:
-
-            worksheet = writer.sheets[
-                sheet_name
-            ]
-
-            worksheet.freeze_panes(1, 1)
-
-            worksheet.set_zoom(90)
-
-            for col_num, value in enumerate(
-                assignments.columns
-            ):
-
-                try:
-
-                    worksheet.write(
-                        0,
-                        col_num,
-                        value,
-                        header_format
-                    )
-
-                except:
-                    pass
+    return df
