@@ -1,107 +1,120 @@
 import pandas as pd
+import re
 
+# -------------------------------------------------
+# LOAD DATAFRAME
+# -------------------------------------------------
 
 def load_dataframe(uploaded_file):
 
-    """
-    Load CSV, XLSX, or ODS files into a pandas DataFrame.
-    """
+    filename = uploaded_file.name.lower()
 
-    ext = uploaded_file.name.split(".")[-1].lower()
-
-    # -------------------------------------------------
+    # ---------------------------------------------
     # CSV
-    # -------------------------------------------------
+    # ---------------------------------------------
 
-    if ext == "csv":
+    if filename.endswith(".csv"):
 
-        df = pd.read_csv(
-            uploaded_file
-        )
+        df = pd.read_csv(uploaded_file)
 
-    # -------------------------------------------------
-    # EXCEL
-    # -------------------------------------------------
+    # ---------------------------------------------
+    # XLSX
+    # ---------------------------------------------
 
-    elif ext in ["xlsx", "xls"]:
-
-        df = pd.read_excel(
-            uploaded_file
-        )
-
-    # -------------------------------------------------
-    # ODS
-    # -------------------------------------------------
-
-    elif ext == "ods":
+    elif filename.endswith(".xlsx"):
 
         df = pd.read_excel(
             uploaded_file,
-            engine="odf"
+            sheet_name=0
         )
 
-    # -------------------------------------------------
-    # INVALID TYPE
-    # -------------------------------------------------
+    # ---------------------------------------------
+    # ODS
+    # ---------------------------------------------
+
+    elif filename.endswith(".ods"):
+
+        df = pd.read_excel(
+            uploaded_file,
+            engine="odf",
+            sheet_name=0
+        )
 
     else:
 
         raise ValueError(
-            f"Unsupported file type: {ext}"
+            "Unsupported file format"
         )
 
-    # -------------------------------------------------
+    # ---------------------------------------------
     # CLEAN COLUMN NAMES
-    # -------------------------------------------------
+    # ---------------------------------------------
 
     df.columns = [
+
         str(c).strip()
+
         for c in df.columns
     ]
 
-    # -------------------------------------------------
-    # CLEAN NAME COLUMN
-    # -------------------------------------------------
+    # ---------------------------------------------
+    # REMOVE UNNAMED COLUMNS
+    # ---------------------------------------------
 
-    if "Name" in df.columns:
+    df = df.loc[
+        :,
+        ~df.columns.str.contains("^Unnamed")
+    ]
 
-        df["Name"] = (
-            df["Name"]
-            .astype(str)
-            .str.strip()
-        )
+    # ---------------------------------------------
+    # AVAILABILITY FILE CLEANING
+    # ---------------------------------------------
 
-    # -------------------------------------------------
-    # REMOVE EMPTY ROWS
-    # -------------------------------------------------
+    if "availability" in filename:
+
+        cleaned_columns = []
+
+        for col in df.columns:
+
+            if col == "Name":
+
+                cleaned_columns.append(col)
+
+                continue
+
+            # -------------------------------------
+            # STRICT MATCH:
+            # 23 May - Prayer
+            # 24 May - Services
+            # -------------------------------------
+
+            match = re.match(
+
+                r"^\d{1,2}\s+[A-Za-z]+\s*-\s*(Prayer|Services)$",
+
+                str(col).strip()
+            )
+
+            if match:
+
+                cleaned_columns.append(
+                    col
+                )
+
+        # -----------------------------------------
+        # KEEP ONLY VALID DATE COLUMNS
+        # -----------------------------------------
+
+        df = df[
+            cleaned_columns
+        ]
+
+    # ---------------------------------------------
+    # DROP EMPTY ROWS
+    # ---------------------------------------------
 
     df = df.dropna(
         how="all"
     )
-
-    # -------------------------------------------------
-    # REPLACE NaN VALUES
-    # -------------------------------------------------
-
-    df = df.fillna(0)
-
-    # -------------------------------------------------
-    # CLEAN NUMERIC COLUMNS
-    # -------------------------------------------------
-
-    for col in df.columns:
-
-        if col == "Name":
-            continue
-
-        try:
-
-            df[col] = pd.to_numeric(
-                df[col],
-                errors="ignore"
-            )
-
-        except:
-            pass
 
     return df
