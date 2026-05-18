@@ -1,218 +1,241 @@
-import numpy as np
 import pandas as pd
 
+CAMPUSES = [
+    "Tygerberg",
+    "Stellies",
+    "Paarl"
+]
 
-def build_metrics(schedule_result):
 
-    assignments = schedule_result.get(
-        "assignments",
-        pd.DataFrame()
-    )
+def autosize_worksheet(worksheet, dataframe):
 
-    summary = schedule_result.get(
-        "summary",
-        pd.DataFrame()
-    )
+    for idx, col in enumerate(dataframe.columns):
 
-    # -------------------------------------------------
-    # EMPTY SAFETY
-    # -------------------------------------------------
+        try:
 
-    if assignments.empty:
+            max_length = max(
+                dataframe[col]
+                .astype(str)
+                .map(len)
+                .max(),
+                len(str(col))
+            ) + 3
 
-        return {
-            "coverage_rate": 0,
-            "unfilled_roles": 0,
-            "fairness_std_dev": 0,
-            "avg_skill_score": 0,
-            "total_assignments": 0,
-            "unique_volunteers": 0,
-            "assistant_assignments": 0
-        }
+        except:
 
-    # -------------------------------------------------
-    # TOTAL ASSIGNMENTS
-    # -------------------------------------------------
+            max_length = 20
 
-    total_assignments = len(assignments)
-
-    # -------------------------------------------------
-    # UNIQUE VOLUNTEERS
-    # -------------------------------------------------
-
-    unique_volunteers = assignments[
-        "Person"
-    ].nunique()
-
-    # -------------------------------------------------
-    # AVERAGE SKILL SCORE
-    # -------------------------------------------------
-
-    if "Skill" in assignments.columns:
-
-        avg_skill_score = round(
-            pd.to_numeric(
-                assignments["Skill"],
-                errors="coerce"
-            ).mean(),
-            2
+        worksheet.set_column(
+            idx,
+            idx,
+            max_length
         )
 
-    else:
 
-        avg_skill_score = 0
+def build_excel_output(
+    schedule_result,
+    output
+):
 
-    # -------------------------------------------------
-    # FAIRNESS STD DEV
-    # -------------------------------------------------
+    assignments = schedule_result["assignments"]
 
-    volunteer_counts = assignments.groupby(
-        "Person"
-    ).size()
+    summary = schedule_result["summary"]
 
-    fairness_std_dev = round(
-        np.std(volunteer_counts),
-        2
-    )
+    with pd.ExcelWriter(
+        output,
+        engine="xlsxwriter"
+    ) as writer:
 
-    # -------------------------------------------------
-    # ASSISTANT COUNT
-    # -------------------------------------------------
+        # -------------------------------------------------
+        # FULL ASSIGNMENTS
+        # -------------------------------------------------
 
-    assistant_assignments = len(
-        assignments[
-            assignments["Role"]
-            .astype(str)
-            .str.contains(
-                "Assistant",
-                case=False,
-                na=False
-            )
+        assignments.to_excel(
+            writer,
+            sheet_name="Assignments",
+            index=False
+        )
+
+        assignment_sheet = writer.sheets[
+            "Assignments"
         ]
-    )
 
-    # -------------------------------------------------
-    # COVERAGE RATE
-    # -------------------------------------------------
-
-    required_roles_per_campus = 5
-
-    campuses = assignments[
-        "Campus"
-    ].nunique()
-
-    dates = assignments[
-        "Date"
-    ].nunique()
-
-    expected_assignments = (
-        required_roles_per_campus *
-        campuses *
-        dates
-    )
-
-    if expected_assignments == 0:
-
-        coverage_rate = 0
-
-    else:
-
-        coverage_rate = round(
-            (
-                total_assignments /
-                expected_assignments
-            ) * 100,
-            1
+        autosize_worksheet(
+            assignment_sheet,
+            assignments
         )
 
-    # -------------------------------------------------
-    # UNFILLED ROLES
-    # -------------------------------------------------
+        # -------------------------------------------------
+        # SUMMARY
+        # -------------------------------------------------
 
-    unfilled_roles = max(
-        0,
-        expected_assignments -
-        total_assignments
-    )
+        summary.to_excel(
+            writer,
+            sheet_name="Summary",
+            index=False
+        )
 
-    # -------------------------------------------------
-    # FREE SUNDAY METRIC
-    # -------------------------------------------------
+        summary_sheet = writer.sheets[
+            "Summary"
+        ]
 
-    free_sunday_count = 0
+        autosize_worksheet(
+            summary_sheet,
+            summary
+        )
 
-    if not summary.empty:
+        # -------------------------------------------------
+        # CAMPUS SHEETS
+        # -------------------------------------------------
 
-        if "Total Assignments" in summary.columns:
+        for campus in CAMPUSES:
 
-            max_assignments = summary[
-                "Total Assignments"
-            ].max()
+            campus_df = assignments[
+                assignments["Campus"] == campus
+            ]
 
-            free_sunday_count = len(
-                summary[
-                    summary["Total Assignments"]
-                    < max_assignments
+            if campus_df.empty:
+                continue
+
+            pivot = campus_df.pivot_table(
+                index="Role",
+                columns="Date",
+                values="Person",
+                aggfunc="first"
+            )
+
+            pivot = pivot.fillna("")
+
+            sheet_name = campus[:31]
+
+            pivot.to_excel(
+                writer,
+                sheet_name=sheet_name
+            )
+
+            worksheet = writer.sheets[sheet_name]
+
+            autosize_worksheet(
+                worksheet,
+                pivot.reset_index()
+            )
+
+        # -------------------------------------------------
+        # SERVICE TYPE SHEETS
+        # -------------------------------------------------
+
+        if "Service" in assignments.columns:
+
+            service_types = assignments[
+                "Service"
+            ].unique()
+
+            for service in service_types:
+
+                service_df = assignments[
+                    assignments["Service"] == service
                 ]
+
+                if service_df.empty:
+                    continue
+
+                service_pivot = service_df.pivot_table(
+                    index=["Campus", "Role"],
+                    columns="Date",
+                    values="Person",
+                    aggfunc="first"
+                )
+
+                service_pivot = service_pivot.fillna("")
+
+                sheet_name = f"{service}_Services"
+
+                sheet_name = sheet_name[:31]
+
+                service_pivot.to_excel(
+                    writer,
+                    sheet_name=sheet_name
+                )
+
+                worksheet = writer.sheets[
+                    sheet_name
+                ]
+
+                autosize_worksheet(
+                    worksheet,
+                    service_pivot.reset_index()
+                )
+
+        # -------------------------------------------------
+        # FAIRNESS REPORT
+        # -------------------------------------------------
+
+        if not summary.empty:
+
+            fairness_columns = [
+                c for c in summary.columns
+                if c in CAMPUSES
+            ]
+
+            fairness_report = summary[
+                [
+                    "Person",
+                    "Total Assignments",
+                    "Target Assignments",
+                    "Fairness Delta"
+                ] + fairness_columns
+            ]
+
+            fairness_report.to_excel(
+                writer,
+                sheet_name="Fairness",
+                index=False
             )
 
-    # -------------------------------------------------
-    # CAMPUS BALANCE
-    # -------------------------------------------------
+            worksheet = writer.sheets[
+                "Fairness"
+            ]
 
-    campus_balance_score = 0
+            autosize_worksheet(
+                worksheet,
+                fairness_report
+            )
 
-    campus_columns = [
-        c for c in summary.columns
-        if c in [
-            "Tygerberg",
-            "Stellies",
-            "Paarl"
-        ]
-    ]
+        # -------------------------------------------------
+        # FORMATTING
+        # -------------------------------------------------
 
-    if campus_columns:
+        workbook = writer.book
 
-        campus_totals = summary[
-            campus_columns
-        ].sum()
+        header_format = workbook.add_format({
+            "bold": True,
+            "bg_color": "#222222",
+            "font_color": "white",
+            "border": 1
+        })
 
-        campus_balance_score = round(
-            np.std(campus_totals),
-            2
-        )
+        for sheet_name in writer.sheets:
 
-    # -------------------------------------------------
-    # RETURN METRICS
-    # -------------------------------------------------
+            worksheet = writer.sheets[
+                sheet_name
+            ]
 
-    return {
+            worksheet.freeze_panes(1, 1)
 
-        "coverage_rate": coverage_rate,
+            worksheet.set_zoom(90)
 
-        "unfilled_roles": int(
-            unfilled_roles
-        ),
+            for col_num, value in enumerate(
+                assignments.columns
+            ):
 
-        "fairness_std_dev": fairness_std_dev,
+                try:
 
-        "avg_skill_score": avg_skill_score,
+                    worksheet.write(
+                        0,
+                        col_num,
+                        value,
+                        header_format
+                    )
 
-        "total_assignments": int(
-            total_assignments
-        ),
-
-        "unique_volunteers": int(
-            unique_volunteers
-        ),
-
-        "assistant_assignments": int(
-            assistant_assignments
-        ),
-
-        "free_sunday_count": int(
-            free_sunday_count
-        ),
-
-        "campus_balance_score": campus_balance_score
-    }
+                except:
+                    pass
