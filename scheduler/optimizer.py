@@ -340,10 +340,6 @@ class Scheduler:
         campus
     ):
 
-        # -----------------------------------------
-        # PRAYER NIGHT
-        # -----------------------------------------
-
         if campus == "Prayer":
 
             if role == "Runner":
@@ -356,19 +352,17 @@ class Scheduler:
 
                 try:
 
-                    value = self.skills_matrix.loc[
-                        person,
-                        "Director"
-                    ]
-
-                    return float(value)
+                    return float(
+                        self.skills_matrix.loc[
+                            person,
+                            "Director"
+                        ]
+                    )
 
                 except:
-
                     return 0
 
             if role == "Sound Assistant":
-
                 role = "Sound"
 
             prayer_cols = [
@@ -377,9 +371,6 @@ class Scheduler:
 
                 if c.startswith("Sound_")
             ]
-
-            if not prayer_cols:
-                return 0
 
             values = []
 
@@ -399,14 +390,7 @@ class Scheduler:
                 except:
                     continue
 
-            if not values:
-                return 0
-
-            return max(values)
-
-        # -----------------------------------------
-        # DIRECTOR SPECIAL CASE
-        # -----------------------------------------
+            return max(values) if values else 0
 
         if role == "Director":
 
@@ -415,20 +399,15 @@ class Scheduler:
 
             try:
 
-                value = self.skills_matrix.loc[
-                    person,
-                    "Director"
-                ]
-
-                return float(value)
+                return float(
+                    self.skills_matrix.loc[
+                        person,
+                        "Director"
+                    ]
+                )
 
             except:
-
                 return 0
-
-        # -----------------------------------------
-        # NORMAL CAMPUS ROLES
-        # -----------------------------------------
 
         col = f"{role}_{campus}"
 
@@ -437,15 +416,14 @@ class Scheduler:
 
         try:
 
-            value = self.skills_matrix.loc[
-                person,
-                col
-            ]
-
-            return float(value)
+            return float(
+                self.skills_matrix.loc[
+                    person,
+                    col
+                ]
+            )
 
         except:
-
             return 0
 
     # -------------------------------------------------
@@ -640,7 +618,7 @@ class Scheduler:
                 continue
 
             # -------------------------------------
-            # SCORE
+            # BASE SCORE
             # -------------------------------------
 
             score = self.scorer.total_score(
@@ -667,33 +645,14 @@ class Scheduler:
 
             if role == "Director":
 
-                total_director_assignments = sum(
-
-                    self.director_campus_history[
-                        person
-                    ].values()
-                )
-
-                score -= (
-                    total_director_assignments * 120
-                )
-
-                same_campus_count = (
-
-                    self.director_campus_history[
-                        person
-                    ][campus]
-                )
-
-                score -= (
-                    same_campus_count * 200
-                )
-
                 last_assignment = (
                     self.last_director_campus.get(
                         person
                     )
                 )
+
+                # HARD BLOCK:
+                # SAME CAMPUS CONSECUTIVE WEEKS
 
                 if last_assignment:
 
@@ -703,7 +662,33 @@ class Scheduler:
 
                     if last_campus == campus:
 
-                        score -= 5000
+                        continue
+
+                # STRONG FAIRNESS
+
+                total_director_assignments = sum(
+
+                    self.director_campus_history[
+                        person
+                    ].values()
+                )
+
+                score -= (
+                    total_director_assignments * 250
+                )
+
+                # CAMPUS REPETITION
+
+                same_campus_count = (
+
+                    self.director_campus_history[
+                        person
+                    ][campus]
+                )
+
+                score -= (
+                    same_campus_count * 400
+                )
 
             # -------------------------------------
             # ASSISTANT FAIRNESS
@@ -739,16 +724,8 @@ class Scheduler:
                 )
             )
 
-        # -----------------------------------------
-        # NO CANDIDATES
-        # -----------------------------------------
-
         if not candidates:
             return
-
-        # -----------------------------------------
-        # PICK BEST
-        # -----------------------------------------
 
         candidates = sorted(
             candidates,
@@ -786,9 +763,7 @@ class Scheduler:
                 best_person
             ].add(date)
 
-        # -----------------------------------------
-        # TRACK DIRECTOR ROTATION
-        # -----------------------------------------
+        # TRACK DIRECTOR HISTORY
 
         if role == "Director":
 
@@ -853,7 +828,7 @@ class Scheduler:
             daily_used_people = set()
 
             # =====================================
-            # PRAYER NIGHT
+            # PRAYER
             # =====================================
 
             if service_type == "Prayer":
@@ -893,9 +868,7 @@ class Scheduler:
 
                 for campus in CAMPUSES:
 
-                    # -----------------------------
-                    # PASS 1 — DIRECTORS
-                    # -----------------------------
+                    # PASS 1 DIRECTORS
 
                     current_step += 1
 
@@ -915,21 +888,15 @@ class Scheduler:
                         ] != "director":
                             continue
 
-                        for _ in range(
-                            role_config["count"]
-                        ):
+                        self.assign_role(
+                            date,
+                            campus,
+                            role_config,
+                            daily_used_people,
+                            "Sunday"
+                        )
 
-                            self.assign_role(
-                                date,
-                                campus,
-                                role_config,
-                                daily_used_people,
-                                "Sunday"
-                            )
-
-                    # -----------------------------
-                    # PASS 2 — MAIN
-                    # -----------------------------
+                    # PASS 2 MAIN
 
                     current_step += 1
 
@@ -949,21 +916,15 @@ class Scheduler:
                         ] != "main":
                             continue
 
-                        for _ in range(
-                            role_config["count"]
-                        ):
+                        self.assign_role(
+                            date,
+                            campus,
+                            role_config,
+                            daily_used_people,
+                            "Sunday"
+                        )
 
-                            self.assign_role(
-                                date,
-                                campus,
-                                role_config,
-                                daily_used_people,
-                                "Sunday"
-                            )
-
-                    # -----------------------------
-                    # PASS 3 — ASSISTANTS
-                    # -----------------------------
+                    # PASS 3 ASSISTANTS
 
                     current_step += 1
 
@@ -983,17 +944,13 @@ class Scheduler:
                         ] != "assistant":
                             continue
 
-                        for _ in range(
-                            role_config["count"]
-                        ):
-
-                            self.assign_role(
-                                date,
-                                campus,
-                                role_config,
-                                daily_used_people,
-                                "Sunday"
-                            )
+                        self.assign_role(
+                            date,
+                            campus,
+                            role_config,
+                            daily_used_people,
+                            "Sunday"
+                        )
 
         # =========================================
         # REPAIR PASS
