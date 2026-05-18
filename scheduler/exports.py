@@ -1,14 +1,12 @@
 import pandas as pd
 
-CAMPUSES = [
-    "Tygerberg",
-    "Stellies",
-    "Paarl"
-]
+from io import BytesIO
+from xlsxwriter.utility import xl_col_to_name
 
+from scheduler.optimizer import CAMPUSES
 
 # -------------------------------------------------
-# AUTO SIZE COLUMNS
+# AUTO COLUMN WIDTH
 # -------------------------------------------------
 
 def autosize_worksheet(
@@ -16,36 +14,266 @@ def autosize_worksheet(
     dataframe
 ):
 
-    for idx, col in enumerate(
-        dataframe.columns
-    ):
+    for idx, col in enumerate(dataframe.columns):
 
         try:
 
-            max_length = max(
-
+            max_len = max(
                 dataframe[col]
                 .astype(str)
                 .map(len)
                 .max(),
-
                 len(str(col))
-
             ) + 3
 
         except:
 
-            max_length = 20
+            max_len = 20
 
         worksheet.set_column(
             idx,
             idx,
-            max_length
+            min(max_len, 40)
         )
 
+# -------------------------------------------------
+# FORMAT WORKSHEET
+# -------------------------------------------------
+
+def format_schedule_sheet(
+    workbook,
+    worksheet,
+    dataframe
+):
+
+    # ---------------------------------------------
+    # FORMATS
+    # ---------------------------------------------
+
+    header_format = workbook.add_format({
+
+        "bold": True,
+        "bg_color": "#1F1F1F",
+        "font_color": "white",
+        "align": "center",
+        "valign": "vcenter",
+        "border": 1
+    })
+
+    role_format = workbook.add_format({
+
+        "bold": True,
+        "bg_color": "#2B2B2B",
+        "font_color": "white",
+        "border": 1
+    })
+
+    cell_format = workbook.add_format({
+
+        "border": 1,
+        "align": "center",
+        "valign": "vcenter"
+    })
+
+    # ---------------------------------------------
+    # HEADER ROW
+    # ---------------------------------------------
+
+    for col_num, value in enumerate(
+        dataframe.columns.values
+    ):
+
+        worksheet.write(
+            0,
+            col_num,
+            value,
+            header_format
+        )
+
+    # ---------------------------------------------
+    # DATA CELLS
+    # ---------------------------------------------
+
+    for row in range(len(dataframe)):
+
+        for col in range(len(dataframe.columns)):
+
+            value = dataframe.iloc[
+                row,
+                col
+            ]
+
+            if col == 0:
+
+                worksheet.write(
+                    row + 1,
+                    col,
+                    value,
+                    role_format
+                )
+
+            else:
+
+                worksheet.write(
+                    row + 1,
+                    col,
+                    value,
+                    cell_format
+                )
+
+    # ---------------------------------------------
+    # FREEZE PANES
+    # ---------------------------------------------
+
+    worksheet.freeze_panes(1, 1)
+
+    # ---------------------------------------------
+    # ROW HEIGHT
+    # ---------------------------------------------
+
+    for row_num in range(
+        len(dataframe) + 1
+    ):
+
+        worksheet.set_row(
+            row_num,
+            28
+        )
 
 # -------------------------------------------------
-# BUILD EXCEL OUTPUT
+# BUILD CAMPUS SHEET
+# -------------------------------------------------
+
+def build_campus_schedule(
+    assignments,
+    campus
+):
+
+    campus_df = assignments[
+        assignments["Campus"] == campus
+    ].copy()
+
+    if campus_df.empty:
+        return pd.DataFrame()
+
+    # ---------------------------------------------
+    # CLEAN DATE FORMAT
+    # ---------------------------------------------
+
+    campus_df["Date"] = pd.to_datetime(
+        campus_df["Date"]
+    ).dt.strftime("%d %b")
+
+    # ---------------------------------------------
+    # ROLE ORDER
+    # ---------------------------------------------
+
+    role_order = [
+
+        "Director",
+
+        "Sound",
+        "Sound Assistant",
+
+        "Lights",
+
+        "Resi",
+
+        "Runner"
+    ]
+
+    # ---------------------------------------------
+    # PIVOT
+    # ---------------------------------------------
+
+    pivot = campus_df.pivot_table(
+
+        index="Role",
+
+        columns="Date",
+
+        values="Person",
+
+        aggfunc="first"
+    )
+
+    pivot = pivot.reindex(
+        role_order
+    )
+
+    pivot = pivot.fillna("")
+
+    pivot = pivot.reset_index()
+
+    return pivot
+
+# -------------------------------------------------
+# BUILD SUMMARY
+# -------------------------------------------------
+
+def build_summary_sheet(
+    summary
+):
+
+    if summary.empty:
+        return pd.DataFrame()
+
+    ordered_columns = [
+
+        "Person",
+
+        "Total Assignments",
+
+        "Tygerberg",
+        "Stellies",
+        "Paarl",
+
+        "Target Assignments",
+
+        "Fairness Delta"
+    ]
+
+    existing = [
+
+        c for c in ordered_columns
+
+        if c in summary.columns
+    ]
+
+    summary = summary[
+        existing
+    ].copy()
+
+    return summary
+
+# -------------------------------------------------
+# BUILD DETAILED ASSIGNMENTS
+# -------------------------------------------------
+
+def build_detailed_sheet(
+    assignments
+):
+
+    detailed = assignments.copy()
+
+    if detailed.empty:
+        return detailed
+
+    detailed["Date"] = pd.to_datetime(
+        detailed["Date"]
+    ).dt.strftime("%d %b %Y")
+
+    detailed = detailed.sort_values([
+
+        "Date",
+        "Campus",
+        "Role"
+    ])
+
+    return detailed
+
+# -------------------------------------------------
+# MAIN EXPORT
 # -------------------------------------------------
 
 def build_excel_output(
@@ -61,38 +289,6 @@ def build_excel_output(
         "summary"
     ]
 
-    logs = schedule_result.get(
-        "logs",
-        []
-    )
-
-    # -------------------------------------------------
-    # EMPTY SAFETY
-    # -------------------------------------------------
-
-    if assignments.empty:
-
-        with pd.ExcelWriter(
-            output,
-            engine="xlsxwriter"
-        ) as writer:
-
-            pd.DataFrame({
-                "Message": [
-                    "No assignments generated"
-                ]
-            }).to_excel(
-                writer,
-                sheet_name="Empty",
-                index=False
-            )
-
-        return
-
-    # -------------------------------------------------
-    # EXCEL WRITER
-    # -------------------------------------------------
-
     with pd.ExcelWriter(
         output,
         engine="xlsxwriter"
@@ -100,120 +296,25 @@ def build_excel_output(
 
         workbook = writer.book
 
-        # -------------------------------------------------
-        # FORMATS
-        # -------------------------------------------------
-
-        header_format = workbook.add_format({
-
-            "bold": True,
-
-            "bg_color": "#222222",
-
-            "font_color": "white",
-
-            "border": 1
-        })
-
-        # -------------------------------------------------
-        # FULL ASSIGNMENTS
-        # -------------------------------------------------
-
-        assignments_export = assignments.sort_values(
-
-            by=[
-                "Date",
-                "Campus",
-                "Role"
-            ]
-        )
-
-        assignments_export.to_excel(
-
-            writer,
-
-            sheet_name="Assignments",
-
-            index=False
-        )
-
-        worksheet = writer.sheets[
-            "Assignments"
-        ]
-
-        autosize_worksheet(
-            worksheet,
-            assignments_export
-        )
-
-        # -------------------------------------------------
-        # SUMMARY
-        # -------------------------------------------------
-
-        if not summary.empty:
-
-            summary_export = summary.sort_values(
-                by="Total Assignments",
-                ascending=False
-            )
-
-            summary_export.to_excel(
-
-                writer,
-
-                sheet_name="Summary",
-
-                index=False
-            )
-
-            worksheet = writer.sheets[
-                "Summary"
-            ]
-
-            autosize_worksheet(
-                worksheet,
-                summary_export
-            )
-
-        # -------------------------------------------------
+        # =========================================
         # CAMPUS SHEETS
-        # -------------------------------------------------
+        # =========================================
 
         for campus in CAMPUSES:
 
-            campus_df = assignments[
-                assignments["Campus"]
-                == campus
-            ].copy()
-
-            if campus_df.empty:
-                continue
-
-            campus_df = campus_df.sort_values(
-
-                by=[
-                    "Date",
-                    "Service",
-                    "Role"
-                ]
+            campus_schedule = (
+                build_campus_schedule(
+                    assignments,
+                    campus
+                )
             )
 
-            export_df = campus_df[
-
-                [
-                    "Date",
-                    "Service",
-                    "Role",
-                    "Person",
-                    "Skill",
-                    "Score"
-                ]
-
-            ]
+            if campus_schedule.empty:
+                continue
 
             sheet_name = campus[:31]
 
-            export_df.to_excel(
+            campus_schedule.to_excel(
 
                 writer,
 
@@ -226,177 +327,127 @@ def build_excel_output(
                 sheet_name
             ]
 
-            autosize_worksheet(
+            format_schedule_sheet(
+                workbook,
                 worksheet,
-                export_df
+                campus_schedule
             )
-
-        # -------------------------------------------------
-        # SERVICE SHEETS
-        # -------------------------------------------------
-
-        if "Service" in assignments.columns:
-
-            service_types = assignments[
-                "Service"
-            ].unique()
-
-            for service in service_types:
-
-                service_df = assignments[
-
-                    assignments["Service"]
-                    == service
-
-                ].copy()
-
-                if service_df.empty:
-                    continue
-
-                service_export = service_df[
-
-                    [
-                        "Date",
-                        "Campus",
-                        "Role",
-                        "Person",
-                        "Skill",
-                        "Score"
-                    ]
-
-                ].sort_values(
-
-                    by=[
-                        "Date",
-                        "Campus",
-                        "Role"
-                    ]
-                )
-
-                sheet_name = (
-                    f"{service}_Services"
-                )[:31]
-
-                service_export.to_excel(
-
-                    writer,
-
-                    sheet_name=sheet_name,
-
-                    index=False
-                )
-
-                worksheet = writer.sheets[
-                    sheet_name
-                ]
-
-                autosize_worksheet(
-                    worksheet,
-                    service_export
-                )
-
-        # -------------------------------------------------
-        # FAIRNESS REPORT
-        # -------------------------------------------------
-
-        if not summary.empty:
-
-            fairness_columns = [
-
-                c for c in summary.columns
-
-                if c in CAMPUSES
-            ]
-
-            fairness_report = summary[
-
-                [
-                    "Person",
-                    "Total Assignments",
-                    "Target Assignments",
-                    "Fairness Delta"
-                ] + fairness_columns
-
-            ]
-
-            fairness_report.to_excel(
-
-                writer,
-
-                sheet_name="Fairness",
-
-                index=False
-            )
-
-            worksheet = writer.sheets[
-                "Fairness"
-            ]
 
             autosize_worksheet(
                 worksheet,
-                fairness_report
+                campus_schedule
             )
 
-        # -------------------------------------------------
-        # LOG SHEET
-        # -------------------------------------------------
+        # =========================================
+        # SUMMARY SHEET
+        # =========================================
 
-        if logs:
+        summary_sheet = build_summary_sheet(
+            summary
+        )
 
-            logs_df = pd.DataFrame({
+        summary_sheet.to_excel(
 
-                "Scheduler Logs": logs
-            })
+            writer,
 
-            logs_df.to_excel(
+            sheet_name="Summary",
 
-                writer,
+            index=False
+        )
 
-                sheet_name="Logs",
+        worksheet = writer.sheets[
+            "Summary"
+        ]
 
-                index=False
+        format_schedule_sheet(
+            workbook,
+            worksheet,
+            summary_sheet
+        )
+
+        autosize_worksheet(
+            worksheet,
+            summary_sheet
+        )
+
+        # =========================================
+        # DETAILED ASSIGNMENTS
+        # =========================================
+
+        detailed_sheet = (
+            build_detailed_sheet(
+                assignments
             )
+        )
 
-            worksheet = writer.sheets[
-                "Logs"
+        detailed_sheet.to_excel(
+
+            writer,
+
+            sheet_name="All Assignments",
+
+            index=False
+        )
+
+        worksheet = writer.sheets[
+            "All Assignments"
+        ]
+
+        format_schedule_sheet(
+            workbook,
+            worksheet,
+            detailed_sheet
+        )
+
+        autosize_worksheet(
+            worksheet,
+            detailed_sheet
+        )
+
+        # =========================================
+        # METADATA SHEET
+        # =========================================
+
+        metadata = pd.DataFrame({
+
+            "Metric": [
+
+                "Generated Assignments",
+                "Unique Volunteers",
+                "Campuses"
+            ],
+
+            "Value": [
+
+                len(assignments),
+
+                assignments["Person"]
+                .nunique(),
+
+                len(CAMPUSES)
             ]
+        })
 
-            autosize_worksheet(
-                worksheet,
-                logs_df
-            )
+        metadata.to_excel(
 
-        # -------------------------------------------------
-        # HEADER FORMATTING
-        # -------------------------------------------------
+            writer,
 
-        for sheet_name in writer.sheets:
+            sheet_name="Metadata",
 
-            worksheet = writer.sheets[
-                sheet_name
-            ]
+            index=False
+        )
 
-            worksheet.freeze_panes(1, 0)
+        worksheet = writer.sheets[
+            "Metadata"
+        ]
 
-            worksheet.set_zoom(90)
+        format_schedule_sheet(
+            workbook,
+            worksheet,
+            metadata
+        )
 
-            try:
-
-                sheet_df = pd.read_excel(
-                    output,
-                    sheet_name=sheet_name
-                )
-
-                for col_num, value in enumerate(
-                    sheet_df.columns
-                ):
-
-                    worksheet.write(
-                        0,
-                        col_num,
-                        value,
-                        header_format
-                    )
-
-            except:
-                pass
+        autosize_worksheet(
+            worksheet,
+            metadata
+        )
