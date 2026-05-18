@@ -1,247 +1,210 @@
 import pandas as pd
-import numpy as np
-
-# -------------------------------------------------
-# WEIGHTING CONFIG
-# -------------------------------------------------
-
-FAIRNESS_WEIGHT = 5
-
-PROFICIENCY_WEIGHT = 2
-
-COVERAGE_WEIGHT = 3
-
-FATIGUE_WEIGHT = 4
-
-ELITE_PENALTY_WEIGHT = 12
-
-FREE_SUNDAY_WEIGHT = 15
 
 
-# -------------------------------------------------
-# CANDIDATE SCORER
-# -------------------------------------------------
+def repair_schedule(
+    schedule,
+    skills_df,
+    availability_df,
+    assignments
+):
 
-class CandidateScorer:
+    """
+    Placeholder repair engine.
 
-    def __init__(
-        self,
-        assignments_count,
-        campus_assignments,
-        recent_assignments,
-        target_assignments,
-        skills_matrix
-    ):
-
-        self.assignments_count = assignments_count
-
-        self.campus_assignments = campus_assignments
-
-        self.recent_assignments = recent_assignments
-
-        self.target_assignments = target_assignments
-
-        self.skills_matrix = skills_matrix
+    Future upgrades:
+    - assignment swaps
+    - fairness balancing
+    - campus balancing
+    - consecutive week protection
+    - unfilled role repair
+    - low-skill exposure balancing
+    """
 
     # -------------------------------------------------
-    # FAIRNESS SCORE
+    # EMPTY SAFETY
     # -------------------------------------------------
 
-    def fairness_score(
-        self,
-        person
-    ):
+    if not assignments:
+        return schedule
 
-        current_assignments = (
-            self.assignments_count[person]
-        )
+    assignments_df = pd.DataFrame(
+        assignments
+    )
 
-        delta = (
-            current_assignments -
-            self.target_assignments
-        )
-
-        return max(
-            0,
-            100 - (delta * 15)
-        )
+    if assignments_df.empty:
+        return schedule
 
     # -------------------------------------------------
-    # PROFICIENCY SCORE
+    # REMOVE DUPLICATE ASSIGNMENTS
     # -------------------------------------------------
 
-    def proficiency_score(
-        self,
-        skill
-    ):
-
-        return skill * 25
+    assignments_df = assignments_df.drop_duplicates()
 
     # -------------------------------------------------
-    # CAMPUS BALANCE SCORE
+    # ENSURE ONE ROLE PER PERSON
+    # PER CAMPUS / DATE
     # -------------------------------------------------
 
-    def campus_balance_score(
-        self,
-        person,
-        campus
-    ):
+    duplicates = assignments_df.duplicated(
+        subset=[
+            "Date",
+            "Campus",
+            "Person"
+        ],
+        keep=False
+    )
 
-        counts = self.campus_assignments[
-            person
-        ]
+    duplicate_rows = assignments_df[
+        duplicates
+    ]
 
-        values = list(
-            counts.values()
-        )
+    if not duplicate_rows.empty:
 
-        if not values:
-            return 20
+        # Placeholder:
+        # Future swap logic can go here
 
-        avg = np.mean(values)
-
-        return max(
-            0,
-            25 - abs(
-                counts[campus] - avg
-            ) * 5
-        )
+        pass
 
     # -------------------------------------------------
-    # FATIGUE PENALTY
+    # DETECT UNFILLED ROLES
     # -------------------------------------------------
 
-    def fatigue_penalty(
-        self,
-        person
-    ):
+    expected_roles = [
+        "Director",
+        "Sound",
+        "Lights",
+        "Resi",
+        "Sound Assistant"
+    ]
 
-        return (
-            self.recent_assignments[person]
-            * 20
-        )
+    campuses = [
+        "Tygerberg",
+        "Stellies",
+        "Paarl"
+    ]
 
-    # -------------------------------------------------
-    # ELITE PENALTY
-    # -------------------------------------------------
+    dates = assignments_df[
+        "Date"
+    ].unique()
 
-    def elite_penalty(
-        self,
-        person
-    ):
+    unfilled_roles = []
 
-        try:
+    for date in dates:
 
-            numeric_values = pd.to_numeric(
-                self.skills_matrix.loc[person],
-                errors="coerce"
-            )
+        for campus in campuses:
 
-            avg_skill = numeric_values.mean()
+            existing_roles = assignments_df[
 
-            if pd.isna(avg_skill):
-                return 0
+                (
+                    assignments_df["Date"]
+                    == date
+                ) &
 
-            if avg_skill >= 2.5:
-
-                return (
-                    self.assignments_count[
-                        person
-                    ] *
-                    ELITE_PENALTY_WEIGHT
+                (
+                    assignments_df["Campus"]
+                    == campus
                 )
 
-        except:
+            ]["Role"].tolist()
 
-            return 0
+            for role in expected_roles:
 
-        return 0
+                if role not in existing_roles:
 
-    # -------------------------------------------------
-    # FREE SUNDAY PENALTY
-    # -------------------------------------------------
+                    unfilled_roles.append({
 
-    def free_sunday_penalty(
-        self,
-        sundays_worked
-    ):
+                        "Date": date,
 
-        if sundays_worked >= 3:
+                        "Campus": campus,
 
-            return FREE_SUNDAY_WEIGHT
-
-        return 0
+                        "Role": role
+                    })
 
     # -------------------------------------------------
-    # LOW SKILL BONUS
+    # FUTURE GAP REPAIR
     # -------------------------------------------------
 
-    def low_skill_bonus(
-        self,
-        skill
-    ):
-
-        """
-        Encourages development exposure
-        for beginner volunteers.
-        """
-
-        if 0 < skill < 2:
-            return 15
-
-        return 0
+    # Example future logic:
+    #
+    # for gap in unfilled_roles:
+    #     find_best_swap_candidate()
+    #     perform_swap()
+    #
+    # Current version only reports gaps.
 
     # -------------------------------------------------
-    # TOTAL SCORE
+    # FAIRNESS ANALYSIS
     # -------------------------------------------------
 
-    def total_score(
-        self,
-        person,
-        campus,
-        skill
-    ):
+    volunteer_counts = assignments_df.groupby(
+        "Person"
+    ).size()
 
-        fairness = self.fairness_score(
-            person
+    fairness_average = volunteer_counts.mean()
+
+    overused = volunteer_counts[
+        volunteer_counts >
+        fairness_average + 2
+    ]
+
+    underused = volunteer_counts[
+        volunteer_counts <
+        fairness_average - 2
+    ]
+
+    # -------------------------------------------------
+    # CAMPUS BALANCE ANALYSIS
+    # -------------------------------------------------
+
+    campus_distribution = assignments_df.pivot_table(
+        index="Person",
+        columns="Campus",
+        values="Role",
+        aggfunc="count",
+        fill_value=0
+    )
+
+    # -------------------------------------------------
+    # LOW PROFICIENCY EXPOSURE ANALYSIS
+    # -------------------------------------------------
+
+    assistant_roles = assignments_df[
+
+        assignments_df["Role"]
+        .astype(str)
+        .str.contains(
+            "Assistant",
+            case=False,
+            na=False
         )
+    ]
 
-        proficiency = self.proficiency_score(
-            skill
-        )
+    assistant_counts = assistant_roles.groupby(
+        "Person"
+    ).size()
 
-        campus_balance = (
-            self.campus_balance_score(
-                person,
-                campus
-            )
-        )
+    # -------------------------------------------------
+    # STORE REPAIR METADATA
+    # -------------------------------------------------
 
-        fatigue = self.fatigue_penalty(
-            person
-        )
+    repair_report = {
 
-        elite = self.elite_penalty(
-            person
-        )
+        "unfilled_roles": unfilled_roles,
 
-        low_skill = self.low_skill_bonus(
-            skill
-        )
+        "overused_volunteers":
+            overused.to_dict(),
 
-        total = (
+        "underused_volunteers":
+            underused.to_dict(),
 
-            FAIRNESS_WEIGHT * fairness +
+        "assistant_distribution":
+            assistant_counts.to_dict()
+    }
 
-            PROFICIENCY_WEIGHT * proficiency +
+    # -------------------------------------------------
+    # ATTACH REPORT
+    # -------------------------------------------------
 
-            COVERAGE_WEIGHT * campus_balance +
+    schedule["repair_report"] = repair_report
 
-            low_skill -
-
-            FATIGUE_WEIGHT * fatigue -
-
-            elite
-        )
-
-        return round(total, 2)
+    return schedule
