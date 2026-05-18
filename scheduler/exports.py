@@ -1,8 +1,5 @@
 import pandas as pd
 
-from io import BytesIO
-from xlsxwriter.utility import xl_col_to_name
-
 from scheduler.optimizer import CAMPUSES
 
 # -------------------------------------------------
@@ -157,12 +154,12 @@ def build_campus_schedule(
         return pd.DataFrame()
 
     # ---------------------------------------------
-    # CLEAN DATE FORMAT
+    # KEEP ORIGINAL DATE LABELS
     # ---------------------------------------------
 
-    campus_df["Date"] = pd.to_datetime(
-        campus_df["Date"]
-    ).dt.strftime("%d %b")
+    campus_df["Date"] = campus_df[
+        "Date"
+    ].astype(str)
 
     # ---------------------------------------------
     # ROLE ORDER
@@ -259,9 +256,9 @@ def build_detailed_sheet(
     if detailed.empty:
         return detailed
 
-    detailed["Date"] = pd.to_datetime(
-        detailed["Date"]
-    ).dt.strftime("%d %b %Y")
+    detailed["Date"] = detailed[
+        "Date"
+    ].astype(str)
 
     detailed = detailed.sort_values([
 
