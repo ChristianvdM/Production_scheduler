@@ -1,13 +1,28 @@
 import pandas as pd
 import numpy as np
 
+# -------------------------------------------------
+# WEIGHTING CONFIGURATION
+# -------------------------------------------------
+
 FAIRNESS_WEIGHT = 5
+
 PROFICIENCY_WEIGHT = 2
+
 COVERAGE_WEIGHT = 3
+
 FATIGUE_WEIGHT = 4
+
 ELITE_PENALTY_WEIGHT = 12
+
 FREE_SUNDAY_WEIGHT = 15
 
+LOW_SKILL_BONUS = 15
+
+
+# -------------------------------------------------
+# CANDIDATE SCORER
+# -------------------------------------------------
 
 class CandidateScorer:
 
@@ -112,31 +127,48 @@ class CandidateScorer:
     # ELITE PENALTY
     # -------------------------------------------------
 
-    def elite_penalty(self, person):
+    def elite_penalty(
+        self,
+        person
+    ):
 
-    try:
+        """
+        Prevent overusing highly skilled people.
+        Handles mixed string/numeric rows safely.
+        """
 
-        numeric_values = pd.to_numeric(
-            self.skills_matrix.loc[person],
-            errors="coerce"
-        )
+        try:
 
-        avg_skill = numeric_values.mean()
+            row = self.skills_matrix.loc[
+                person
+            ]
 
-        if pd.isna(avg_skill):
-            return 0
-
-        if avg_skill >= 2.5:
-
-            return (
-                self.assignments_count[person]
-                * ELITE_PENALTY_WEIGHT
+            numeric_values = pd.to_numeric(
+                row,
+                errors="coerce"
             )
 
-    except:
-        return 0
+            numeric_values = numeric_values.dropna()
 
-    return 0
+            if numeric_values.empty:
+                return 0
+
+            avg_skill = numeric_values.mean()
+
+            if avg_skill >= 2.5:
+
+                return (
+                    self.assignments_count[
+                        person
+                    ] *
+                    ELITE_PENALTY_WEIGHT
+                )
+
+        except Exception:
+
+            return 0
+
+        return 0
 
     # -------------------------------------------------
     # FREE SUNDAY PENALTY
@@ -162,8 +194,14 @@ class CandidateScorer:
         skill
     ):
 
+        """
+        Encourages low proficiency volunteers
+        to get exposure.
+        """
+
         if 0 < skill < 2:
-            return 15
+
+            return LOW_SKILL_BONUS
 
         return 0
 
