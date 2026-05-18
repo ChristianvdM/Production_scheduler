@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 
 from collections import defaultdict
 
@@ -85,7 +86,6 @@ SERVICE_CONFIG = {
     ]
 }
 
-
 # -------------------------------------------------
 # SCHEDULER
 # -------------------------------------------------
@@ -127,15 +127,50 @@ class Scheduler:
         self.sundays_worked = defaultdict(set)
 
         # -----------------------------------------
-        # DATE COLUMNS
+        # DATE COLUMNS + SERVICE TYPES
         # -----------------------------------------
 
-        self.date_columns = [
+        self.date_columns = []
 
-            c for c in self.availability_df.columns
+        self.service_map = {}
 
-            if c != "Name"
-        ]
+        for c in self.availability_df.columns:
+
+            if c == "Name":
+                continue
+
+            if not isinstance(c, str):
+                continue
+
+            column = c.strip()
+
+            # -------------------------------------
+            # MATCH:
+            # 23 May - Prayer
+            # 30 May - Services
+            # -------------------------------------
+
+            match = re.match(
+
+                r"^(\d{1,2}\s+[A-Za-z]+)\s*-\s*(Prayer|Services)$",
+
+                column
+            )
+
+            if not match:
+                continue
+
+            service_part = match.group(2)
+
+            self.date_columns.append(column)
+
+            if service_part == "Services":
+
+                self.service_map[column] = "Sunday"
+
+            else:
+
+                self.service_map[column] = service_part
 
         # -----------------------------------------
         # SKILLS MATRIX
@@ -179,15 +214,28 @@ class Scheduler:
 
     def calculate_target_assignments(self):
 
-        total_dates = len(self.date_columns)
+        total_slots = 0
 
-        roles_per_service = 5
+        for date in self.date_columns:
 
-        total_slots = (
-            total_dates *
-            len(CAMPUSES) *
-            roles_per_service
-        )
+            service_type = self.service_map.get(
+                date,
+                "Sunday"
+            )
+
+            roles = SERVICE_CONFIG[
+                service_type
+            ]
+
+            role_count = sum(
+                r["count"]
+                for r in roles
+            )
+
+            total_slots += (
+                role_count *
+                len(CAMPUSES)
+            )
 
         people_count = max(
             1,
@@ -547,7 +595,10 @@ class Scheduler:
 
         for date in self.date_columns:
 
-            service_type = "Sunday"
+            service_type = self.service_map.get(
+                date,
+                "Sunday"
+            )
 
             for campus in CAMPUSES:
 
@@ -738,7 +789,6 @@ class Scheduler:
             "target_assignments":
                 self.target_assignments
         }
-
 
 # -------------------------------------------------
 # EXTERNAL GENERATOR
