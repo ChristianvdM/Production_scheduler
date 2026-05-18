@@ -122,16 +122,12 @@ if skills_file and availability_file:
     try:
 
         # -------------------------------------------
-        # RUNTIME UI
+        # PROGRESS UI
         # -------------------------------------------
 
         progress_bar = st.progress(0)
 
         status_text = st.empty()
-
-        log_container = st.empty()
-
-        runtime_logs = []
 
         def update_progress(
             progress,
@@ -146,23 +142,12 @@ if skills_file and availability_file:
                 f"⚙️ {message}"
             )
 
-        def add_runtime_log(message):
-
-            runtime_logs.append(message)
-
-            last_logs = runtime_logs[-15:]
-
-            log_container.code(
-                "\n".join(last_logs),
-                language="text"
-            )
-
         # -------------------------------------------
-        # START
+        # LOAD DATA
         # -------------------------------------------
 
-        add_runtime_log(
-            "Loading spreadsheets..."
+        status_text.info(
+            "⚙️ Loading spreadsheets..."
         )
 
         skills_df = load_dataframe(
@@ -173,16 +158,12 @@ if skills_file and availability_file:
             availability_file
         )
 
-        add_runtime_log(
-            "Files loaded successfully."
-        )
-
         # -------------------------------------------
-        # GENERATE
+        # GENERATE SCHEDULE
         # -------------------------------------------
 
-        add_runtime_log(
-            "Starting optimization..."
+        status_text.info(
+            "⚙️ Optimizing schedule..."
         )
 
         schedule_result = generate_schedule(
@@ -191,16 +172,12 @@ if skills_file and availability_file:
             progress_callback=update_progress
         )
 
-        add_runtime_log(
-            "Optimization complete."
-        )
-
         # -------------------------------------------
-        # EXPORT
+        # BUILD EXPORT
         # -------------------------------------------
 
-        add_runtime_log(
-            "Building Excel export..."
+        status_text.info(
+            "⚙️ Building Excel export..."
         )
 
         output = BytesIO()
@@ -208,10 +185,6 @@ if skills_file and availability_file:
         build_excel_output(
             schedule_result,
             output
-        )
-
-        add_runtime_log(
-            "Excel export complete."
         )
 
         # -------------------------------------------
@@ -222,19 +195,15 @@ if skills_file and availability_file:
             schedule_result
         )
 
+        # -------------------------------------------
+        # COMPLETE
+        # -------------------------------------------
+
         progress_bar.progress(1.0)
 
         status_text.success(
             "✅ Schedule generation complete"
         )
-
-        add_runtime_log(
-            "Schedule generation completed successfully."
-        )
-
-        # -------------------------------------------
-        # SUCCESS
-        # -------------------------------------------
 
         st.success(
             "✅ Schedule generated successfully"
@@ -293,24 +262,7 @@ if skills_file and availability_file:
         )
 
         # -------------------------------------------
-        # INTERNAL SCHEDULER LOGS
-        # -------------------------------------------
-
-        if "logs" in schedule_result:
-
-            st.markdown(
-                "## 🧠 Scheduler Logs"
-            )
-
-            st.code(
-                "\n".join(
-                    schedule_result["logs"]
-                ),
-                language="text"
-            )
-
-        # -------------------------------------------
-        # DOWNLOAD
+        # DOWNLOAD BUTTON
         # -------------------------------------------
 
         st.download_button(
