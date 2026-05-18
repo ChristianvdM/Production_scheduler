@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 
 from collections import defaultdict
 
@@ -109,8 +108,6 @@ class Scheduler:
 
         self.assignments = []
 
-        self.logs = []
-
         self.schedule = defaultdict(dict)
 
         # -----------------------------------------
@@ -165,16 +162,6 @@ class Scheduler:
             self.target_assignments,
             self.skills_matrix
         )
-
-    # -------------------------------------------------
-    # LOGGER
-    # -------------------------------------------------
-
-    def log(self, message):
-
-        print(message)
-
-        self.logs.append(message)
 
     # -------------------------------------------------
     # SKILL MATRIX
@@ -448,14 +435,6 @@ class Scheduler:
         # -----------------------------------------
 
         if not candidates:
-
-            self.log(
-                f"WARNING: No candidates "
-                f"for {role} "
-                f"at {campus} "
-                f"on {date}"
-            )
-
             return
 
         # -----------------------------------------
@@ -523,17 +502,6 @@ class Scheduler:
             "Score": round(best_score, 2)
         })
 
-        # -----------------------------------------
-        # LOG SUCCESS
-        # -----------------------------------------
-
-        self.log(
-            f"Assigned {best_person} "
-            f"to {role} "
-            f"at {campus} "
-            f"on {date}"
-        )
-
     # -------------------------------------------------
     # GENERATE SCHEDULE
     # -------------------------------------------------
@@ -542,10 +510,6 @@ class Scheduler:
         self,
         progress_callback=None
     ):
-
-        self.log(
-            "Starting schedule generation..."
-        )
 
         total_steps = (
             len(self.date_columns) *
@@ -557,17 +521,9 @@ class Scheduler:
 
         for date in self.date_columns:
 
-            self.log(
-                f"Processing date: {date}"
-            )
-
             service_type = "Sunday"
 
             for campus in CAMPUSES:
-
-                self.log(
-                    f"Scheduling campus: {campus}"
-                )
 
                 used_people = set()
 
@@ -583,10 +539,6 @@ class Scheduler:
                         current_step / total_steps,
                         f"{date} | {campus} | Directors"
                     )
-
-                self.log(
-                    f"{date} | {campus} | PASS 1 Directors"
-                )
 
                 for role_config in SERVICE_CONFIG[
                     service_type
@@ -622,10 +574,6 @@ class Scheduler:
                         f"{date} | {campus} | Main Roles"
                     )
 
-                self.log(
-                    f"{date} | {campus} | PASS 2 Main Roles"
-                )
-
                 for role_config in SERVICE_CONFIG[
                     service_type
                 ]:
@@ -660,10 +608,6 @@ class Scheduler:
                         f"{date} | {campus} | Assistants"
                     )
 
-                self.log(
-                    f"{date} | {campus} | PASS 3 Assistants"
-                )
-
                 for role_config in SERVICE_CONFIG[
                     service_type
                 ]:
@@ -689,19 +633,11 @@ class Scheduler:
         # REPAIR PASS
         # -----------------------------------------
 
-        self.log(
-            "Starting repair pass..."
-        )
-
         repair_schedule(
             self.schedule,
             self.skills_df,
             self.availability_df,
             self.assignments
-        )
-
-        self.log(
-            "Repair pass complete."
         )
 
         return self.build_result()
@@ -774,9 +710,7 @@ class Scheduler:
             "schedule": self.schedule,
 
             "target_assignments":
-                self.target_assignments,
-
-            "logs": self.logs
+                self.target_assignments
         }
 
 
