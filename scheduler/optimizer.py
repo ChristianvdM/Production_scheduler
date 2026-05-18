@@ -64,6 +64,13 @@ SERVICE_CONFIG = {
     "Prayer": [
 
         {
+            "role": "Director",
+            "type": "director",
+            "min_skill": 2,
+            "count": 1
+        },
+
+        {
             "role": "Sound",
             "type": "main",
             "min_skill": 2,
@@ -127,6 +134,16 @@ class Scheduler:
         self.sundays_worked = defaultdict(set)
 
         # -----------------------------------------
+        # DIRECTOR ROTATION TRACKING
+        # -----------------------------------------
+
+        self.director_campus_history = defaultdict(
+            lambda: defaultdict(int)
+        )
+
+        self.last_director_campus = {}
+
+        # -----------------------------------------
         # DATE COLUMNS + SERVICE TYPES
         # -----------------------------------------
 
@@ -156,19 +173,11 @@ class Scheduler:
 
             extracted_service = match.group(2).strip()
 
-            # -------------------------------------
-            # PREVENT DUPLICATES
-            # -------------------------------------
-
             if extracted_date not in self.date_columns:
 
                 self.date_columns.append(
                     extracted_date
                 )
-
-            # -------------------------------------
-            # MAP SERVICE TYPE
-            # -------------------------------------
 
             if extracted_service == "Services":
 
@@ -181,10 +190,6 @@ class Scheduler:
                 self.service_map[
                     extracted_date
                 ] = "Prayer"
-
-            # -------------------------------------
-            # MAP ORIGINAL COLUMN
-            # -------------------------------------
 
             self.original_column_map[
                 extracted_date
@@ -324,6 +329,24 @@ class Scheduler:
 
             if role == "Runner":
                 return 1
+
+            if role == "Director":
+
+                if "Director" not in self.skills_matrix.columns:
+                    return 0
+
+                try:
+
+                    value = self.skills_matrix.loc[
+                        person,
+                        "Director"
+                    ]
+
+                    return float(value)
+
+                except:
+
+                    return 0
 
             if role == "Sound Assistant":
 
@@ -550,6 +573,25 @@ class Scheduler:
             )
 
             # -------------------------------------
+            # DIRECTOR ROTATION
+            # -------------------------------------
+
+            if role == "Director":
+
+                score -= (
+
+                    self.director_campus_history[
+                        person
+                    ][campus] * 25
+                )
+
+                if self.last_director_campus.get(
+                    person
+                ) == campus:
+
+                    score -= 40
+
+            # -------------------------------------
             # ASSISTANT FAIRNESS
             # -------------------------------------
 
@@ -629,6 +671,20 @@ class Scheduler:
             self.sundays_worked[
                 best_person
             ].add(date)
+
+        # -----------------------------------------
+        # TRACK DIRECTOR ROTATION
+        # -----------------------------------------
+
+        if role == "Director":
+
+            self.director_campus_history[
+                best_person
+            ][campus] += 1
+
+            self.last_director_campus[
+                best_person
+            ] = campus
 
         # -----------------------------------------
         # STORE ASSIGNMENT
