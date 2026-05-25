@@ -57,22 +57,25 @@ try:
             img_file.read()
         ).decode()
 
-        st.markdown(
-            f"""
-            <div style='text-align:center;'>
+    st.markdown(
+        f"""
+        <div style="text-align:center; margin-bottom:20px;">
 
-                <img
-                    src='data:image/png;base64,{encoded}'
-                    width='500'
-                >
+            <img
+                src="data:image/png;base64,{encoded}"
+                width="500"
+            >
 
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-except:
-    pass
+except Exception as e:
+
+    st.warning(
+        f"Logo could not load: {e}"
+    )
 
 # ---------------------------------------------------
 # TITLE
