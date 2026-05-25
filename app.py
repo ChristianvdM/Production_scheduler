@@ -1,6 +1,7 @@
 import streamlit as st
+import pandas as pd
 from io import BytesIO
-
+import base64
 
 from scheduler.loaders import load_dataframe
 from scheduler.optimizer import generate_schedule
@@ -23,7 +24,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-
         body {
             background-color: #000000;
             color: white;
@@ -33,194 +33,211 @@ st.markdown(
             background-color: #000000;
         }
 
+        .stButton>button,
+        .stDownloadButton>button {
+            background-color: #444;
+            color: white;
+        }
+
+        .stMetric {
+            background-color: #111;
+            padding: 15px;
+            border-radius: 10px;
+        }
     </style>
     """,
     unsafe_allow_html=True
 )
 
+# ---------------------------------------------------
+# LOGO
+# ---------------------------------------------------
+
 try:
 
-    st.image(
-        "assets/image.png",
-        width=500
-    )
+    with open("assets/image.png", "rb") as img_file:
 
-except Exception as e:
+        encoded = base64.b64encode(
+            img_file.read()
+        ).decode()
+
+        st.markdown(
+            f"""
+            <div style='text-align: center; margin-bottom: 20px;'>
+                <img
+                    src='data:image/png;base64,{encoded}'
+                    width='500'
+                >
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+except FileNotFoundError:
 
     st.warning(
-        f"Logo could not load: {e}"
+        "Logo not found. Place image.png inside assets/"
     )
 
 # ---------------------------------------------------
 # TITLE
 # ---------------------------------------------------
 
-st.title(
-    "📅 CPT Production Team Scheduler"
+st.title("📅 CPT Production Team Scheduler")
+
+st.markdown(
+    """
+    Upload your:
+
+    - Skills spreadsheet
+    - Availability spreadsheet
+
+    Supported formats:
+    - CSV
+    - XLSX
+    - ODS
+    """
 )
+
+# ---------------------------------------------------
+# FILE UPLOADERS
+# ---------------------------------------------------
 
 skills_file = st.file_uploader(
     "Upload Skills File",
-    type=[
-        "csv",
-        "xlsx",
-        "ods"
-    ]
+    type=["csv", "xlsx", "ods"]
 )
 
 availability_file = st.file_uploader(
     "Upload Availability File",
-    type=[
-        "csv",
-        "xlsx",
-        "ods"
-    ]
+    type=["csv", "xlsx", "ods"]
 )
 
 # ---------------------------------------------------
-# MAIN APP
+# GENERATE SCHEDULE
 # ---------------------------------------------------
 
 if skills_file and availability_file:
 
     try:
 
-        progress_bar = st.progress(0)
-
-        status = st.empty()
-
-        def update_progress(
-            progress,
-            message
+        with st.spinner(
+            "Generating optimized schedule..."
         ):
 
-            progress_bar.progress(
-                progress
+            # ---------------------------------------
+            # LOAD DATA
+            # ---------------------------------------
+
+            skills_df = load_dataframe(
+                skills_file
             )
 
-            status.info(
-                f"⚙️ {message}"
+            availability_df = load_dataframe(
+                availability_file
             )
 
-        # ---------------------------------------------------
-        # LOAD FILES
-        # ---------------------------------------------------
+            # ---------------------------------------
+            # BUILD SCHEDULE
+            # ---------------------------------------
 
-        skills_df = load_dataframe(
-            skills_file
+            schedule_result = generate_schedule(
+                skills_df,
+                availability_df
+            )
+
+            # ---------------------------------------
+            # EXPORT EXCEL
+            # ---------------------------------------
+
+            output = BytesIO()
+
+            build_excel_output(
+                schedule_result,
+                output
+            )
+
+            # ---------------------------------------
+            # METRICS
+            # ---------------------------------------
+
+            metrics = build_metrics(
+                schedule_result
+            )
+
+        # -------------------------------------------
+        # SUCCESS
+        # -------------------------------------------
+
+        st.success(
+            "✅ Schedule generated successfully"
         )
 
-        availability_df = load_dataframe(
-            availability_file
-        )
-
-        # ---------------------------------------------------
-        # GENERATE
-        # ---------------------------------------------------
-
-        schedule_result = generate_schedule(
-            skills_df,
-            availability_df,
-            progress_callback=update_progress
-        )
-
-        # ---------------------------------------------------
-        # EXPORT
-        # ---------------------------------------------------
-
-        output = BytesIO()
-
-        build_excel_output(
-            schedule_result,
-            output
-        )
-
-        metrics = build_metrics(
-            schedule_result
-        )
-
-        progress_bar.progress(1.0)
-
-        status.success(
-            "✅ Schedule complete"
-        )
-
-        # ---------------------------------------------------
-        # METRICS
-        # ---------------------------------------------------
+        # -------------------------------------------
+        # METRICS DISPLAY
+        # -------------------------------------------
 
         col1, col2, col3, col4 = st.columns(4)
 
         col1.metric(
-            "Coverage",
+            "Coverage Rate",
             f"{metrics['coverage_rate']}%"
         )
 
         col2.metric(
-            "Unfilled",
-            metrics["unfilled_roles"]
+            "Unfilled Roles",
+            metrics['unfilled_roles']
         )
 
         col3.metric(
-            "Fairness",
-            metrics["fairness_std_dev"]
+            "Fairness Std Dev",
+            metrics['fairness_std_dev']
         )
 
         col4.metric(
-            "Skill",
-            metrics["avg_skill_score"]
+            "Average Skill Score",
+            metrics['avg_skill_score']
         )
 
-        # ---------------------------------------------------
-        # SUMMARY
-        # ---------------------------------------------------
+        # -------------------------------------------
+        # SUMMARY TABLE
+        # -------------------------------------------
 
-        st.markdown(
-            "## Summary"
-        )
+        st.markdown("## 📊 Assignment Summary")
 
         st.dataframe(
             schedule_result["summary"],
-            width="stretch"
+            use_container_width=True
         )
 
-        # ---------------------------------------------------
-        # ASSIGNMENTS
-        # ---------------------------------------------------
+        # -------------------------------------------
+        # ASSIGNMENT TABLE
+        # -------------------------------------------
 
-        st.markdown(
-            "## Assignments"
-        )
+        st.markdown("## 🗓 Full Assignments")
 
         st.dataframe(
             schedule_result["assignments"],
-            width="stretch"
+            use_container_width=True
         )
 
-        # ---------------------------------------------------
-        # DOWNLOAD
-        # ---------------------------------------------------
+        # -------------------------------------------
+        # DOWNLOAD BUTTON
+        # -------------------------------------------
 
         st.download_button(
-
-            label="📥 Download Schedule",
-
+            label="📥 Download Excel Schedule",
             data=output.getvalue(),
-
-            file_name=(
-                "production_schedule.xlsx"
-            ),
-
+            file_name="production_schedule.xlsx",
             mime=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
+                "application/"
+                "vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
             )
         )
 
     except Exception as e:
 
-        st.error(
-            "❌ Scheduler Error"
-        )
+        st.error("❌ Scheduler Error")
 
         st.exception(e)
