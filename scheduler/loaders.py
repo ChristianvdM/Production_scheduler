@@ -13,28 +13,23 @@ def normalize_name(name):
 
     name = str(name)
 
-    # Unicode normalize
     name = unicodedata.normalize(
         "NFKD",
         name
     )
 
-    # Remove accents
     name = "".join(
         c for c in name
         if not unicodedata.combining(c)
     )
 
-    # Lowercase
     name = name.lower()
 
-    # Normalize apostrophes
     name = (
         name.replace("’", "'")
             .replace("`", "'")
     )
 
-    # Collapse spaces
     name = re.sub(
         r"\s+",
         " ",
@@ -71,10 +66,6 @@ def load_dataframe(file):
         raise ValueError(
             "Unsupported file format"
         )
-
-    # ---------------------------------------------------
-    # CLEAN NAME COLUMN
-    # ---------------------------------------------------
 
     if "Name" in df.columns:
 
