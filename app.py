@@ -1,6 +1,6 @@
 import streamlit as st
 from io import BytesIO
-import base64
+
 
 from scheduler.loaders import load_dataframe
 from scheduler.optimizer import generate_schedule
@@ -38,37 +38,11 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ---------------------------------------------------
-# LOGO
-# ---------------------------------------------------
-
-# ---------------------------------------------------
-# LOGO
-# ---------------------------------------------------
-
 try:
 
-    with open(
+    st.image(
         "assets/image.png",
-        "rb"
-    ) as img_file:
-
-        encoded = base64.b64encode(
-            img_file.read()
-        ).decode()
-
-    st.markdown(
-        f"""
-        <div style="text-align:center; margin-bottom:20px;">
-
-            <img
-                src="data:image/png;base64,{encoded}"
-                width="500"
-            >
-
-        </div>
-        """,
-        unsafe_allow_html=True
+        width=500
     )
 
 except Exception as e:
