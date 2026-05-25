@@ -1,64 +1,43 @@
 import pandas as pd
-import unicodedata
 import re
 
-# ---------------------------------------------------
-# NAME NORMALIZATION
-# ---------------------------------------------------
-
-def normalize_name(name):
-
-    if pd.isna(name):
-        return ""
-
-    name = str(name)
-
-    name = unicodedata.normalize(
-        "NFKD",
-        name
-    )
-
-    name = "".join(
-        c for c in name
-        if not unicodedata.combining(c)
-    )
-
-    name = name.lower()
-
-    name = (
-        name.replace("’", "'")
-            .replace("`", "'")
-    )
-
-    name = re.sub(
-        r"\s+",
-        " ",
-        name
-    )
-
-    return name.strip()
-
-# ---------------------------------------------------
+# -------------------------------------------------
 # LOAD DATAFRAME
-# ---------------------------------------------------
+# -------------------------------------------------
 
-def load_dataframe(file):
+def load_dataframe(uploaded_file):
 
-    filename = file.name.lower()
+    filename = uploaded_file.name.lower()
+
+    # ---------------------------------------------
+    # CSV
+    # ---------------------------------------------
 
     if filename.endswith(".csv"):
 
-        df = pd.read_csv(file)
+        df = pd.read_csv(uploaded_file)
+
+    # ---------------------------------------------
+    # XLSX
+    # ---------------------------------------------
 
     elif filename.endswith(".xlsx"):
 
-        df = pd.read_excel(file)
+        df = pd.read_excel(
+            uploaded_file,
+            sheet_name=0
+        )
+
+    # ---------------------------------------------
+    # ODS
+    # ---------------------------------------------
 
     elif filename.endswith(".ods"):
 
         df = pd.read_excel(
-            file,
-            engine="odf"
+            uploaded_file,
+            engine="odf",
+            sheet_name=0
         )
 
     else:
@@ -67,17 +46,75 @@ def load_dataframe(file):
             "Unsupported file format"
         )
 
-    if "Name" in df.columns:
+    # ---------------------------------------------
+    # CLEAN COLUMN NAMES
+    # ---------------------------------------------
 
-        df["Name"] = (
-            df["Name"]
-            .astype(str)
-            .str.strip()
-        )
+    df.columns = [
 
-        df["Name_Normalized"] = (
-            df["Name"]
-            .apply(normalize_name)
-        )
+        str(c).strip()
+
+        for c in df.columns
+    ]
+
+    # ---------------------------------------------
+    # REMOVE UNNAMED COLUMNS
+    # ---------------------------------------------
+
+    df = df.loc[
+        :,
+        ~df.columns.str.contains("^Unnamed")
+    ]
+
+    # ---------------------------------------------
+    # AVAILABILITY FILE CLEANING
+    # ---------------------------------------------
+
+    if "availability" in filename:
+
+        cleaned_columns = []
+
+        for col in df.columns:
+
+            if col == "Name":
+
+                cleaned_columns.append(col)
+
+                continue
+
+            # -------------------------------------
+            # STRICT MATCH:
+            # 23 May - Prayer
+            # 24 May - Services
+            # -------------------------------------
+
+            match = re.match(
+
+                r"^\d{1,2}\s+[A-Za-z]+\s*-\s*(Prayer|Services)$",
+
+                str(col).strip()
+            )
+
+            if match:
+
+                cleaned_columns.append(
+                    col
+                )
+
+        # -----------------------------------------
+        # KEEP ONLY VALID DATE COLUMNS
+        # -----------------------------------------
+
+        df = df[
+            cleaned_columns
+        ]
+
+    # ---------------------------------------------
+    # DROP EMPTY ROWS
+    # ---------------------------------------------
+
+    df = df.dropna(
+        how="all"
+    )
 
     return df
