@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 from io import BytesIO
 import base64
 
@@ -34,18 +33,6 @@ st.markdown(
             background-color: #000000;
         }
 
-        .stButton>button,
-        .stDownloadButton>button {
-            background-color: #444;
-            color: white;
-        }
-
-        .stMetric {
-            background-color: #111;
-            padding: 15px;
-            border-radius: 10px;
-        }
-
     </style>
     """,
     unsafe_allow_html=True
@@ -68,7 +55,7 @@ try:
 
         st.markdown(
             f"""
-            <div style='text-align: center; margin-bottom: 20px;'>
+            <div style='text-align:center;'>
 
                 <img
                     src='data:image/png;base64,{encoded}'
@@ -80,12 +67,8 @@ try:
             unsafe_allow_html=True
         )
 
-except FileNotFoundError:
-
-    st.warning(
-        "Logo not found. "
-        "Place image.png inside assets/"
-    )
+except:
+    pass
 
 # ---------------------------------------------------
 # TITLE
@@ -94,25 +77,6 @@ except FileNotFoundError:
 st.title(
     "📅 CPT Production Team Scheduler"
 )
-
-st.markdown(
-    """
-    Upload your:
-
-    - Skills spreadsheet
-    - Availability spreadsheet
-
-    Supported formats:
-
-    - CSV
-    - XLSX
-    - ODS
-    """
-)
-
-# ---------------------------------------------------
-# FILE UPLOADERS
-# ---------------------------------------------------
 
 skills_file = st.file_uploader(
     "Upload Skills File",
@@ -140,13 +104,9 @@ if skills_file and availability_file:
 
     try:
 
-        # ---------------------------------------------------
-        # PROGRESS BAR
-        # ---------------------------------------------------
-
         progress_bar = st.progress(0)
 
-        status_text = st.empty()
+        status = st.empty()
 
         def update_progress(
             progress,
@@ -154,21 +114,16 @@ if skills_file and availability_file:
         ):
 
             progress_bar.progress(
-                min(progress, 1.0)
+                progress
             )
 
-            status_text.info(
+            status.info(
                 f"⚙️ {message}"
             )
 
         # ---------------------------------------------------
         # LOAD FILES
         # ---------------------------------------------------
-
-        update_progress(
-            0.05,
-            "Loading spreadsheets..."
-        )
 
         skills_df = load_dataframe(
             skills_file
@@ -179,59 +134,8 @@ if skills_file and availability_file:
         )
 
         # ---------------------------------------------------
-        # VALIDATION
+        # GENERATE
         # ---------------------------------------------------
-
-        required_skills_columns = [
-            "Name"
-        ]
-
-        required_availability_columns = [
-            "Name"
-        ]
-
-        missing_skills = [
-
-            col for col in
-            required_skills_columns
-
-            if col not in skills_df.columns
-        ]
-
-        missing_availability = [
-
-            col for col in
-            required_availability_columns
-
-            if col not in availability_df.columns
-        ]
-
-        if missing_skills:
-
-            st.error(
-                "Skills file missing columns: "
-                + ", ".join(missing_skills)
-            )
-
-            st.stop()
-
-        if missing_availability:
-
-            st.error(
-                "Availability file missing columns: "
-                + ", ".join(missing_availability)
-            )
-
-            st.stop()
-
-        # ---------------------------------------------------
-        # GENERATE SCHEDULE
-        # ---------------------------------------------------
-
-        update_progress(
-            0.15,
-            "Optimizing schedule..."
-        )
 
         schedule_result = generate_schedule(
             skills_df,
@@ -240,13 +144,8 @@ if skills_file and availability_file:
         )
 
         # ---------------------------------------------------
-        # BUILD EXCEL OUTPUT
+        # EXPORT
         # ---------------------------------------------------
-
-        update_progress(
-            0.90,
-            "Building Excel export..."
-        )
 
         output = BytesIO()
 
@@ -255,115 +154,75 @@ if skills_file and availability_file:
             output
         )
 
-        # ---------------------------------------------------
-        # BUILD METRICS
-        # ---------------------------------------------------
-
         metrics = build_metrics(
             schedule_result
         )
 
-        # ---------------------------------------------------
-        # COMPLETE
-        # ---------------------------------------------------
-
         progress_bar.progress(1.0)
 
-        status_text.success(
-            "✅ Schedule generation complete"
-        )
-
-        st.success(
-            "✅ Schedule generated successfully"
+        status.success(
+            "✅ Schedule complete"
         )
 
         # ---------------------------------------------------
         # METRICS
         # ---------------------------------------------------
 
-        st.markdown(
-            "## 📊 Schedule Metrics"
-        )
-
         col1, col2, col3, col4 = st.columns(4)
 
         col1.metric(
-            "Coverage Rate",
+            "Coverage",
             f"{metrics['coverage_rate']}%"
         )
 
         col2.metric(
-            "Unfilled Roles",
+            "Unfilled",
             metrics["unfilled_roles"]
         )
 
         col3.metric(
-            "Fairness Std Dev",
+            "Fairness",
             metrics["fairness_std_dev"]
         )
 
         col4.metric(
-            "Average Skill Score",
+            "Skill",
             metrics["avg_skill_score"]
         )
 
         # ---------------------------------------------------
-        # SUMMARY TABLE
+        # SUMMARY
         # ---------------------------------------------------
 
         st.markdown(
-            "## 📋 Assignment Summary"
+            "## Summary"
         )
 
-        summary_df = schedule_result[
-            "summary"
-        ]
-
-        if not summary_df.empty:
-
-            st.dataframe(
-                summary_df,
-                use_container_width=True
-            )
-
-        else:
-
-            st.warning(
-                "No summary data generated."
-            )
+        st.dataframe(
+            schedule_result["summary"],
+            width="stretch"
+        )
 
         # ---------------------------------------------------
-        # ASSIGNMENTS TABLE
+        # ASSIGNMENTS
         # ---------------------------------------------------
 
         st.markdown(
-            "## 🗓 Full Assignments"
+            "## Assignments"
         )
 
-        assignments_df = schedule_result[
-            "assignments"
-        ]
-
-        if not assignments_df.empty:
-
-            st.dataframe(
-                assignments_df,
-                use_container_width=True
-            )
-
-        else:
-
-            st.warning(
-                "No assignments generated."
-            )
+        st.dataframe(
+            schedule_result["assignments"],
+            width="stretch"
+        )
 
         # ---------------------------------------------------
-        # DOWNLOAD BUTTON
+        # DOWNLOAD
         # ---------------------------------------------------
 
         st.download_button(
 
-            label="📥 Download Excel Schedule",
+            label="📥 Download Schedule",
 
             data=output.getvalue(),
 
@@ -372,9 +231,8 @@ if skills_file and availability_file:
             ),
 
             mime=(
-                "application/"
-                "vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
             )
         )
 
