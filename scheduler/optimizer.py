@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from collections import defaultdict
 from datetime import datetime
 
@@ -9,7 +8,7 @@ from scheduler.loaders import normalize_name
 # CONFIG
 # ---------------------------------------------------
 
-CAMPUS = [
+CAMPUSES = [
     "Tygerberg",
     "Stellies",
     "Paarl"
@@ -21,16 +20,6 @@ ROLES_SUNDAY = [
     "Resi"
 ]
 
-ROLES_SATURDAY = [
-    "Sound",
-    "Lights",
-    "Resi",
-    "Assistant"
-]
-
-MAX_SUNDAYS = 3
-MAX_SATURDAYS = 3
-
 # ---------------------------------------------------
 # MAIN SCHEDULER
 # ---------------------------------------------------
@@ -40,10 +29,6 @@ def generate_schedule(
     availability_df,
     progress_callback=None
 ):
-
-    # ---------------------------------------------------
-    # PROGRESS HELPER
-    # ---------------------------------------------------
 
     def update_progress(
         progress,
@@ -59,11 +44,11 @@ def generate_schedule(
 
     update_progress(
         0.05,
-        "Preparing scheduling engine..."
+        "Preparing scheduler..."
     )
 
     # ---------------------------------------------------
-    # DATE DETECTION
+    # DATE COLUMNS
     # ---------------------------------------------------
 
     date_columns = [
@@ -76,7 +61,6 @@ def generate_schedule(
         ]
     ]
 
-    saturday_dates = []
     sunday_dates = []
 
     for d in date_columns:
@@ -88,14 +72,12 @@ def generate_schedule(
                 "%Y-%m-%d"
             )
 
-            if parsed.weekday() == 5:
-                saturday_dates.append(d)
+            if parsed.weekday() == 6:
 
-            elif parsed.weekday() == 6:
                 sunday_dates.append(d)
 
         except:
-            continue
+            pass
 
     # ---------------------------------------------------
     # STORAGE
@@ -103,26 +85,18 @@ def generate_schedule(
 
     schedule = {}
 
-    for campus in CAMPUS:
+    for campus in CAMPUSES:
 
         schedule[f"{campus}_Sunday"] = {
-            d: {} for d in sunday_dates
+
+            d: {}
+
+            for d in sunday_dates
         }
 
-    schedule["Tygerberg_Saturday"] = {
-        d: {} for d in saturday_dates
-    }
+    assignments = []
 
-    assignments_count = defaultdict(int)
-
-    assignment_log = defaultdict(
-        lambda: {
-            "Sunday": 0,
-            "Saturday": 0
-        }
-    )
-
-    detailed_assignments = []
+    assignment_counts = defaultdict(int)
 
     # ---------------------------------------------------
     # HELPERS
@@ -140,7 +114,10 @@ def generate_schedule(
 
         ]["Name"].tolist()
 
-    def get_person_row(person):
+    def get_skill(
+        person,
+        skill_col
+    ):
 
         person_norm = normalize_name(
             person
@@ -154,18 +131,12 @@ def generate_schedule(
         ]
 
         if matches.empty:
-            return None
-
-        return matches.iloc[0]
-
-    def get_skill(person, col):
-
-        row = get_person_row(person)
-
-        if row is None:
             return 0
 
-        value = row.get(col, 0)
+        value = matches.iloc[0].get(
+            skill_col,
+            0
+        )
 
         try:
             return float(value)
@@ -173,527 +144,110 @@ def generate_schedule(
         except:
             return 0
 
-    def get_eligible(
+    def get_best_person(
         people,
-        col,
-        minimum_skill
+        skill_col,
+        used_people
     ):
 
-        eligible = []
+        candidates = []
 
         for person in people:
 
+            if person in used_people:
+                continue
+
             skill = get_skill(
                 person,
-                col
+                skill_col
             )
 
-            if skill >= minimum_skill:
-                eligible.append(person)
-
-        return eligible
-
-    def get_least_assigned(people):
-
-        return sorted(
-            people,
-            key=lambda p: (
-                assignments_count[p]
+            candidates.append(
+                (
+                    person,
+                    skill,
+                    assignment_counts[person]
+                )
             )
-        )
 
-    def assign_person(
-        person,
-        campus,
-        role,
-        service_day,
-        schedule_key,
-        date,
-        role_key
-    ):
+        if not candidates:
+            return None
 
-        schedule[
-            schedule_key
-        ][date][role_key] = person
+        candidates = sorted(
 
-        assignments_count[
-            person
-        ] += 1
+            candidates,
 
-        assignment_log[
-            person
-        ][service_day] += 1
-
-        detailed_assignments.append(
-            (
-                person,
-                campus,
-                role,
-                service_day,
-                date
+            key=lambda x: (
+                -x[1],
+                x[2]
             )
         )
+
+        return candidates[0][0]
 
     # ---------------------------------------------------
-    # ASSIGN DIRECTORS FIRST
+    # ASSIGNMENTS
     # ---------------------------------------------------
 
     update_progress(
-        0.15,
-        "Assigning directors..."
-    )
-
-    all_dates = (
-        saturday_dates
-        + sunday_dates
-    )
-
-    for date in all_dates:
-
-        all_available = get_available_people(
-            date
-        )
-
-        # ---------------------------------------------------
-        # SATURDAY
-        # ---------------------------------------------------
-
-        if date in saturday_dates:
-
-            under_limit = [
-
-                p for p in all_available
-
-                if assignment_log[p]["Saturday"]
-                < MAX_SATURDAYS
-            ]
-
-            eligible = get_eligible(
-                under_limit,
-                "Director",
-                2
-            )
-
-            if not eligible:
-
-                eligible = get_eligible(
-                    all_available,
-                    "Director",
-                    2
-                )
-
-            if not eligible:
-
-                eligible = all_available
-
-            director = next(
-
-                iter(
-                    get_least_assigned(
-                        eligible
-                    )
-                ),
-
-                None
-            )
-
-            if director:
-
-                assign_person(
-                    director,
-                    "Tygerberg",
-                    "Director",
-                    "Saturday",
-                    "Tygerberg_Saturday",
-                    date,
-                    "Director"
-                )
-
-        # ---------------------------------------------------
-        # SUNDAY
-        # ---------------------------------------------------
-
-        if date in sunday_dates:
-
-            for campus in CAMPUS:
-
-                under_limit = [
-
-                    p for p in all_available
-
-                    if assignment_log[p]["Sunday"]
-                    < MAX_SUNDAYS
-                ]
-
-                eligible = get_eligible(
-                    under_limit,
-                    "Director",
-                    2
-                )
-
-                if not eligible:
-
-                    eligible = get_eligible(
-                        all_available,
-                        "Director",
-                        2
-                    )
-
-                if not eligible:
-
-                    eligible = all_available
-
-                director = next(
-
-                    iter(
-                        get_least_assigned(
-                            eligible
-                        )
-                    ),
-
-                    None
-                )
-
-                if director:
-
-                    assign_person(
-                        director,
-                        campus,
-                        "Director",
-                        "Sunday",
-                        f"{campus}_Sunday",
-                        date,
-                        "Director"
-                    )
-
-    # ---------------------------------------------------
-    # ASSIGN SUNDAY ROLES
-    # ---------------------------------------------------
-
-    update_progress(
-        0.40,
-        "Assigning Sunday teams..."
+        0.30,
+        "Generating assignments..."
     )
 
     for date in sunday_dates:
 
-        all_available = get_available_people(
-            date
+        available_people = (
+            get_available_people(date)
         )
 
-        for campus in CAMPUS:
+        for campus in CAMPUSES:
 
-            used = set(
-
-                schedule[
-                    f"{campus}_Sunday"
-                ][date].values()
-
-            )
+            used_people = set()
 
             for role in ROLES_SUNDAY:
 
-                col = f"{role}_{campus}"
-
-                # ---------------------------------------------------
-                # MAIN
-                # ---------------------------------------------------
-
-                under_limit = [
-
-                    p for p in all_available
-
-                    if assignment_log[p]["Sunday"]
-                    < MAX_SUNDAYS
-                ]
-
-                eligible_main = get_eligible(
-                    under_limit,
-                    col,
-                    2
+                skill_col = (
+                    f"{role}_{campus}"
                 )
 
-                main_candidates = [
-
-                    p for p in
-                    get_least_assigned(
-                        eligible_main
-                    )
-
-                    if p not in used
-                ]
-
-                if not main_candidates:
-
-                    eligible_main = get_eligible(
-                        all_available,
-                        col,
-                        2
-                    )
-
-                    main_candidates = [
-
-                        p for p in
-                        get_least_assigned(
-                            eligible_main
-                        )
-
-                        if p not in used
-                    ]
-
-                main = next(
-                    iter(main_candidates),
-                    None
+                person = get_best_person(
+                    available_people,
+                    skill_col,
+                    used_people
                 )
 
-                if main:
+                if person:
 
-                    assign_person(
-                        main,
-                        campus,
-                        f"{role} Main",
-                        "Sunday",
-                        f"{campus}_Sunday",
-                        date,
-                        f"{role} Main"
+                    schedule[
+                        f"{campus}_Sunday"
+                    ][date][role] = person
+
+                    used_people.add(person)
+
+                    assignment_counts[
+                        person
+                    ] += 1
+
+                    assignments.append(
+                        {
+                            "Date": date,
+                            "Campus": campus,
+                            "Role": role,
+                            "Name": person
+                        }
                     )
-
-                    used.add(main)
-
-                # ---------------------------------------------------
-                # ASSISTANT
-                # ---------------------------------------------------
-
-                eligible_assist = get_eligible(
-                    all_available,
-                    col,
-                    1
-                )
-
-                assist_candidates = [
-
-                    p for p in
-                    get_least_assigned(
-                        eligible_assist
-                    )
-
-                    if (
-                        p not in used
-                        and p != main
-                    )
-                ]
-
-                assist = next(
-                    iter(assist_candidates),
-                    None
-                )
-
-                if assist:
-
-                    assign_person(
-                        assist,
-                        campus,
-                        f"{role} Assistant",
-                        "Sunday",
-                        f"{campus}_Sunday",
-                        date,
-                        f"{role} Assistant"
-                    )
-
-                    used.add(assist)
 
     # ---------------------------------------------------
-    # ASSIGN SATURDAY ROLES
+    # DATAFRAMES
     # ---------------------------------------------------
 
     update_progress(
-        0.70,
-        "Assigning Saturday teams..."
-    )
-
-    for date in saturday_dates:
-
-        all_available = get_available_people(
-            date
-        )
-
-        used = set(
-
-            schedule[
-                "Tygerberg_Saturday"
-            ][date].values()
-
-        )
-
-        for role in [
-
-            "Sound",
-            "Lights",
-            "Resi"
-
-        ]:
-
-            col = f"{role}_Tygerberg"
-
-            under_limit = [
-
-                p for p in all_available
-
-                if assignment_log[p]["Saturday"]
-                < MAX_SATURDAYS
-            ]
-
-            eligible = get_eligible(
-                under_limit,
-                col,
-                2
-            )
-
-            main_candidates = [
-
-                p for p in
-                get_least_assigned(
-                    eligible
-                )
-
-                if p not in used
-            ]
-
-            if not main_candidates:
-
-                eligible = get_eligible(
-                    all_available,
-                    col,
-                    2
-                )
-
-                main_candidates = [
-
-                    p for p in
-                    get_least_assigned(
-                        eligible
-                    )
-
-                    if p not in used
-                ]
-
-            main = next(
-                iter(main_candidates),
-                None
-            )
-
-            if main:
-
-                assign_person(
-                    main,
-                    "Tygerberg",
-                    role,
-                    "Saturday",
-                    "Tygerberg_Saturday",
-                    date,
-                    role
-                )
-
-                used.add(main)
-
-        # ---------------------------------------------------
-        # SATURDAY ASSISTANT
-        # ---------------------------------------------------
-
-        def total_skill(person):
-
-            row = get_person_row(person)
-
-            if row is None:
-                return 0
-
-            cols = [
-
-                "Sound_Tygerberg",
-                "Lights_Tygerberg",
-                "Resi_Tygerberg",
-                "Director"
-            ]
-
-            total = 0
-
-            for c in cols:
-
-                try:
-                    total += float(
-                        row.get(c, 0)
-                    )
-                except:
-                    pass
-
-            return total
-
-        eligible_assist = [
-
-            p for p in all_available
-
-            if (
-                p not in used
-                and any(
-
-                    get_skill(p, c) >= 1
-
-                    for c in [
-                        "Sound_Tygerberg",
-                        "Lights_Tygerberg",
-                        "Resi_Tygerberg"
-                    ]
-                )
-            )
-        ]
-
-        eligible_assist = sorted(
-
-            eligible_assist,
-
-            key=lambda p: (
-                assignments_count[p],
-                total_skill(p)
-            )
-        )
-
-        assistant = next(
-            iter(eligible_assist),
-            None
-        )
-
-        if assistant:
-
-            assign_person(
-                assistant,
-                "Tygerberg",
-                "Assistant",
-                "Saturday",
-                "Tygerberg_Saturday",
-                date,
-                "Assistant"
-            )
-
-    # ---------------------------------------------------
-    # BUILD DATAFRAMES
-    # ---------------------------------------------------
-
-    update_progress(
-        0.90,
-        "Building schedule outputs..."
+        0.80,
+        "Building outputs..."
     )
 
     assignments_df = pd.DataFrame(
-
-        detailed_assignments,
-
-        columns=[
-            "Name",
-            "Campus",
-            "Role",
-            "Day",
-            "Date"
-        ]
+        assignments
     )
 
     if assignments_df.empty:
@@ -708,13 +262,9 @@ def generate_schedule(
             name="Assignments"
         )
 
-    # ---------------------------------------------------
-    # RESULTS
-    # ---------------------------------------------------
-
     update_progress(
         1.0,
-        "Schedule complete"
+        "Complete"
     )
 
     return {
@@ -723,9 +273,5 @@ def generate_schedule(
 
         "assignments": assignments_df,
 
-        "summary": summary_df,
-
-        "assignment_counts": dict(
-            assignments_count
-        )
+        "summary": summary_df
     }
