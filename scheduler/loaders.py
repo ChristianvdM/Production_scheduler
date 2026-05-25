@@ -1,43 +1,69 @@
 import pandas as pd
+import unicodedata
 import re
 
-# -------------------------------------------------
+# ---------------------------------------------------
+# NAME NORMALIZATION
+# ---------------------------------------------------
+
+def normalize_name(name):
+
+    if pd.isna(name):
+        return ""
+
+    name = str(name)
+
+    # Unicode normalize
+    name = unicodedata.normalize(
+        "NFKD",
+        name
+    )
+
+    # Remove accents
+    name = "".join(
+        c for c in name
+        if not unicodedata.combining(c)
+    )
+
+    # Lowercase
+    name = name.lower()
+
+    # Normalize apostrophes
+    name = (
+        name.replace("’", "'")
+            .replace("`", "'")
+    )
+
+    # Collapse spaces
+    name = re.sub(
+        r"\s+",
+        " ",
+        name
+    )
+
+    return name.strip()
+
+# ---------------------------------------------------
 # LOAD DATAFRAME
-# -------------------------------------------------
+# ---------------------------------------------------
 
-def load_dataframe(uploaded_file):
+def load_dataframe(file):
 
-    filename = uploaded_file.name.lower()
-
-    # ---------------------------------------------
-    # CSV
-    # ---------------------------------------------
+    filename = file.name.lower()
 
     if filename.endswith(".csv"):
 
-        df = pd.read_csv(uploaded_file)
-
-    # ---------------------------------------------
-    # XLSX
-    # ---------------------------------------------
+        df = pd.read_csv(file)
 
     elif filename.endswith(".xlsx"):
 
-        df = pd.read_excel(
-            uploaded_file,
-            sheet_name=0
-        )
-
-    # ---------------------------------------------
-    # ODS
-    # ---------------------------------------------
+        df = pd.read_excel(file)
 
     elif filename.endswith(".ods"):
 
         df = pd.read_excel(
-            uploaded_file,
-            engine="odf",
-            sheet_name=0
+            file,
+            engine="odf"
         )
 
     else:
@@ -46,75 +72,21 @@ def load_dataframe(uploaded_file):
             "Unsupported file format"
         )
 
-    # ---------------------------------------------
-    # CLEAN COLUMN NAMES
-    # ---------------------------------------------
+    # ---------------------------------------------------
+    # CLEAN NAME COLUMN
+    # ---------------------------------------------------
 
-    df.columns = [
+    if "Name" in df.columns:
 
-        str(c).strip()
+        df["Name"] = (
+            df["Name"]
+            .astype(str)
+            .str.strip()
+        )
 
-        for c in df.columns
-    ]
-
-    # ---------------------------------------------
-    # REMOVE UNNAMED COLUMNS
-    # ---------------------------------------------
-
-    df = df.loc[
-        :,
-        ~df.columns.str.contains("^Unnamed")
-    ]
-
-    # ---------------------------------------------
-    # AVAILABILITY FILE CLEANING
-    # ---------------------------------------------
-
-    if "availability" in filename:
-
-        cleaned_columns = []
-
-        for col in df.columns:
-
-            if col == "Name":
-
-                cleaned_columns.append(col)
-
-                continue
-
-            # -------------------------------------
-            # STRICT MATCH:
-            # 23 May - Prayer
-            # 24 May - Services
-            # -------------------------------------
-
-            match = re.match(
-
-                r"^\d{1,2}\s+[A-Za-z]+\s*-\s*(Prayer|Services)$",
-
-                str(col).strip()
-            )
-
-            if match:
-
-                cleaned_columns.append(
-                    col
-                )
-
-        # -----------------------------------------
-        # KEEP ONLY VALID DATE COLUMNS
-        # -----------------------------------------
-
-        df = df[
-            cleaned_columns
-        ]
-
-    # ---------------------------------------------
-    # DROP EMPTY ROWS
-    # ---------------------------------------------
-
-    df = df.dropna(
-        how="all"
-    )
+        df["Name_Normalized"] = (
+            df["Name"]
+            .apply(normalize_name)
+        )
 
     return df
