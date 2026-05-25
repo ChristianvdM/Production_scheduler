@@ -24,6 +24,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+
         body {
             background-color: #000000;
             color: white;
@@ -44,6 +45,7 @@ st.markdown(
             padding: 15px;
             border-radius: 10px;
         }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -55,7 +57,10 @@ st.markdown(
 
 try:
 
-    with open("assets/image.png", "rb") as img_file:
+    with open(
+        "assets/image.png",
+        "rb"
+    ) as img_file:
 
         encoded = base64.b64encode(
             img_file.read()
@@ -64,10 +69,12 @@ try:
         st.markdown(
             f"""
             <div style='text-align: center; margin-bottom: 20px;'>
+
                 <img
                     src='data:image/png;base64,{encoded}'
                     width='500'
                 >
+
             </div>
             """,
             unsafe_allow_html=True
@@ -76,14 +83,17 @@ try:
 except FileNotFoundError:
 
     st.warning(
-        "Logo not found. Place image.png inside assets/"
+        "Logo not found. "
+        "Place image.png inside assets/"
     )
 
 # ---------------------------------------------------
 # TITLE
 # ---------------------------------------------------
 
-st.title("📅 CPT Production Team Scheduler")
+st.title(
+    "📅 CPT Production Team Scheduler"
+)
 
 st.markdown(
     """
@@ -93,6 +103,7 @@ st.markdown(
     - Availability spreadsheet
 
     Supported formats:
+
     - CSV
     - XLSX
     - ODS
@@ -105,25 +116,33 @@ st.markdown(
 
 skills_file = st.file_uploader(
     "Upload Skills File",
-    type=["csv", "xlsx", "ods"]
+    type=[
+        "csv",
+        "xlsx",
+        "ods"
+    ]
 )
 
 availability_file = st.file_uploader(
     "Upload Availability File",
-    type=["csv", "xlsx", "ods"]
+    type=[
+        "csv",
+        "xlsx",
+        "ods"
+    ]
 )
 
 # ---------------------------------------------------
-# GENERATE SCHEDULE
+# MAIN APP
 # ---------------------------------------------------
 
 if skills_file and availability_file:
 
     try:
 
-        # -------------------------------------------
-        # PROGRESS UI
-        # -------------------------------------------
+        # ---------------------------------------------------
+        # PROGRESS BAR
+        # ---------------------------------------------------
 
         progress_bar = st.progress(0)
 
@@ -142,12 +161,13 @@ if skills_file and availability_file:
                 f"⚙️ {message}"
             )
 
-        # -------------------------------------------
-        # LOAD DATA
-        # -------------------------------------------
+        # ---------------------------------------------------
+        # LOAD FILES
+        # ---------------------------------------------------
 
-        status_text.info(
-            "⚙️ Loading spreadsheets..."
+        update_progress(
+            0.05,
+            "Loading spreadsheets..."
         )
 
         skills_df = load_dataframe(
@@ -158,12 +178,59 @@ if skills_file and availability_file:
             availability_file
         )
 
-        # -------------------------------------------
-        # GENERATE SCHEDULE
-        # -------------------------------------------
+        # ---------------------------------------------------
+        # VALIDATION
+        # ---------------------------------------------------
 
-        status_text.info(
-            "⚙️ Optimizing schedule..."
+        required_skills_columns = [
+            "Name"
+        ]
+
+        required_availability_columns = [
+            "Name"
+        ]
+
+        missing_skills = [
+
+            col for col in
+            required_skills_columns
+
+            if col not in skills_df.columns
+        ]
+
+        missing_availability = [
+
+            col for col in
+            required_availability_columns
+
+            if col not in availability_df.columns
+        ]
+
+        if missing_skills:
+
+            st.error(
+                "Skills file missing columns: "
+                + ", ".join(missing_skills)
+            )
+
+            st.stop()
+
+        if missing_availability:
+
+            st.error(
+                "Availability file missing columns: "
+                + ", ".join(missing_availability)
+            )
+
+            st.stop()
+
+        # ---------------------------------------------------
+        # GENERATE SCHEDULE
+        # ---------------------------------------------------
+
+        update_progress(
+            0.15,
+            "Optimizing schedule..."
         )
 
         schedule_result = generate_schedule(
@@ -172,12 +239,13 @@ if skills_file and availability_file:
             progress_callback=update_progress
         )
 
-        # -------------------------------------------
-        # BUILD EXPORT
-        # -------------------------------------------
+        # ---------------------------------------------------
+        # BUILD EXCEL OUTPUT
+        # ---------------------------------------------------
 
-        status_text.info(
-            "⚙️ Building Excel export..."
+        update_progress(
+            0.90,
+            "Building Excel export..."
         )
 
         output = BytesIO()
@@ -187,17 +255,17 @@ if skills_file and availability_file:
             output
         )
 
-        # -------------------------------------------
-        # METRICS
-        # -------------------------------------------
+        # ---------------------------------------------------
+        # BUILD METRICS
+        # ---------------------------------------------------
 
         metrics = build_metrics(
             schedule_result
         )
 
-        # -------------------------------------------
+        # ---------------------------------------------------
         # COMPLETE
-        # -------------------------------------------
+        # ---------------------------------------------------
 
         progress_bar.progress(1.0)
 
@@ -209,9 +277,13 @@ if skills_file and availability_file:
             "✅ Schedule generated successfully"
         )
 
-        # -------------------------------------------
-        # METRICS DISPLAY
-        # -------------------------------------------
+        # ---------------------------------------------------
+        # METRICS
+        # ---------------------------------------------------
+
+        st.markdown(
+            "## 📊 Schedule Metrics"
+        )
 
         col1, col2, col3, col4 = st.columns(4)
 
@@ -222,53 +294,83 @@ if skills_file and availability_file:
 
         col2.metric(
             "Unfilled Roles",
-            metrics['unfilled_roles']
+            metrics["unfilled_roles"]
         )
 
         col3.metric(
             "Fairness Std Dev",
-            metrics['fairness_std_dev']
+            metrics["fairness_std_dev"]
         )
 
         col4.metric(
             "Average Skill Score",
-            metrics['avg_skill_score']
+            metrics["avg_skill_score"]
         )
 
-        # -------------------------------------------
+        # ---------------------------------------------------
         # SUMMARY TABLE
-        # -------------------------------------------
+        # ---------------------------------------------------
 
         st.markdown(
-            "## 📊 Assignment Summary"
+            "## 📋 Assignment Summary"
         )
 
-        st.dataframe(
-            schedule_result["summary"],
-            use_container_width=True
-        )
+        summary_df = schedule_result[
+            "summary"
+        ]
 
-        # -------------------------------------------
+        if not summary_df.empty:
+
+            st.dataframe(
+                summary_df,
+                use_container_width=True
+            )
+
+        else:
+
+            st.warning(
+                "No summary data generated."
+            )
+
+        # ---------------------------------------------------
         # ASSIGNMENTS TABLE
-        # -------------------------------------------
+        # ---------------------------------------------------
 
         st.markdown(
             "## 🗓 Full Assignments"
         )
 
-        st.dataframe(
-            schedule_result["assignments"],
-            use_container_width=True
-        )
+        assignments_df = schedule_result[
+            "assignments"
+        ]
 
-        # -------------------------------------------
+        if not assignments_df.empty:
+
+            st.dataframe(
+                assignments_df,
+                use_container_width=True
+            )
+
+        else:
+
+            st.warning(
+                "No assignments generated."
+            )
+
+        # ---------------------------------------------------
         # DOWNLOAD BUTTON
-        # -------------------------------------------
+        # ---------------------------------------------------
 
         st.download_button(
+
             label="📥 Download Excel Schedule",
+
             data=output.getvalue(),
-            file_name="production_schedule.xlsx",
+
+            file_name=(
+                "production_schedule.xlsx"
+            ),
+
             mime=(
                 "application/"
                 "vnd.openxmlformats-officedocument."
