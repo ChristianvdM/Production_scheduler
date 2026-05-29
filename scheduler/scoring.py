@@ -1,34 +1,79 @@
+# =========================================================
+# CANDIDATE SCORE
+# =========================================================
+
 def calculate_candidate_score(
+
     volunteer,
+
     role,
+
     campus,
+
     skill_level,
-    metrics,
+
+    metrics
 ):
 
-    served_count = metrics[
+    served_counts = metrics[
         "served_counts"
-    ][volunteer]
+    ]
 
-    campus_count = metrics[
+    campus_counts = metrics[
         "campus_counts"
-    ][volunteer][campus]
+    ]
+
+    total_served = served_counts.get(
+        volunteer,
+        0
+    )
+
+    campus_served = campus_counts.get(
+        (volunteer, campus),
+        0
+    )
+
+    # =====================================================
+    # PRIORITY 1:
+    # ROLE COVERAGE
+    # =====================================================
+
+    coverage_weight = 1000
+
+    # =====================================================
+    # PRIORITY 2:
+    # FAIRNESS
+    # =====================================================
 
     fairness_penalty = (
-        served_count * 8
+        total_served * 15
     )
 
     campus_penalty = (
-        campus_count * 2
+        campus_served * 8
     )
 
-    proficiency_bonus = (
-        skill_level * 15
+    # =====================================================
+    # PRIORITY 3:
+    # SKILL
+    # =====================================================
+
+    skill_bonus = (
+        skill_level * 10
     )
+
+    # =====================================================
+    # FINAL SCORE
+    # =====================================================
 
     score = (
-        proficiency_bonus
+
+        coverage_weight
+
+        + skill_bonus
+
         - fairness_penalty
+
         - campus_penalty
     )
 
