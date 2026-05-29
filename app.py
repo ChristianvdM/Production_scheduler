@@ -44,19 +44,22 @@ st.set_page_config(
 st.title("📅 CPT Production Scheduler")
 
 st.markdown("""
-This scheduler optimizes:
-- Fair volunteer rotation
-- Role coverage
-- Skill proficiency
-- Campus distribution
+This scheduler prioritizes:
+1. Filling ALL required roles
+2. Leadership coverage
+3. Fair volunteer rotation
+4. Balanced campus distribution
+5. Skill optimization
 
 Rules:
-- Volunteers cannot serve on two campuses on the same day
-- High-skilled operators cannot serve as assistants
-- Prayer nights include two runners
-- Volunteers must exist in BOTH:
-  - skills file
-  - availability file
+- Directors scheduled first
+- Main roles scheduled second
+- Assistants scheduled third
+- Runners/setup scheduled last
+- Volunteers cannot serve on two campuses on same day
+- High-skilled operators cannot serve assistant roles
+- Director skill level 3 cannot serve assistant/setup/runner roles
+- Volunteers must exist in BOTH skills and availability files
 """)
 
 
@@ -78,6 +81,52 @@ actual_schedule_file = st.file_uploader(
     "Upload Historical Actual Schedule (Optional)",
     type=["csv", "xlsx", "ods"]
 )
+
+
+# =========================================================
+# ROLE PRIORITY
+# =========================================================
+
+def role_priority_value(role):
+
+    role = str(role).lower()
+
+    # =====================================================
+    # DIRECTORS FIRST
+    # =====================================================
+
+    if role == "director":
+        return 1
+
+    # =====================================================
+    # MAIN ROLES
+    # =====================================================
+
+    if role in [
+        "sound",
+        "lights",
+        "resi"
+    ]:
+        return 2
+
+    # =====================================================
+    # ASSISTANTS
+    # =====================================================
+
+    if "assistant" in role:
+        return 3
+
+    # =====================================================
+    # RUNNERS / SETUP
+    # =====================================================
+
+    if (
+        "runner" in role
+        or "production setup" in role
+    ):
+        return 4
+
+    return 5
 
 
 # =========================================================
@@ -167,7 +216,7 @@ if skills_file and availability_file:
                 date_str = str(date).strip()
 
                 # =========================================
-                # DETERMINE CONFIGS
+                # DETERMINE SERVICE CONFIGS
                 # =========================================
 
                 service_configs = []
@@ -249,7 +298,7 @@ if skills_file and availability_file:
                 ]
 
                 # =========================================
-                # PROCESS CONFIGS
+                # PROCESS EACH CAMPUS
                 # =========================================
 
                 for config_key, campus in service_configs:
@@ -261,23 +310,14 @@ if skills_file and availability_file:
                     used_people = set()
 
                     # =====================================
-                    # PRIORITY ORDER
+                    # SORT ROLES BY PRIORITY
                     # =====================================
 
                     role_priority = sorted(
 
                         config["roles"],
 
-                        key=lambda r: (
-
-                            "Director" not in r,
-
-                            "Sound" not in r,
-
-                            "Lights" not in r,
-
-                            "Resi" not in r
-                        )
+                        key=role_priority_value
                     )
 
                     # =====================================
@@ -287,7 +327,7 @@ if skills_file and availability_file:
                     for role in role_priority:
 
                         # =================================
-                        # MAP ROLE -> SKILL
+                        # MAP ROLE -> SKILL COLUMN
                         # =================================
 
                         if role == "Director":
@@ -315,13 +355,20 @@ if skills_file and availability_file:
                             )
 
                         elif (
-                            "Production Setup" in role
-                            or "Runner" in role
+                            "Runner" in role
+                            or "Production Setup"
+                            in role
                         ):
-                        
-                            # Setup volunteers use
-                            # sound skill as proxy
-                        
+
+                            # Use sound as
+                            # general setup skill
+
+                            skill_column = (
+                                f"Sound_{campus}"
+                            )
+
+                        else:
+
                             skill_column = (
                                 f"Sound_{campus}"
                             )
@@ -372,7 +419,7 @@ if skills_file and availability_file:
         # =================================================
 
         with st.spinner(
-            "Optimizing schedule..."
+            "Optimizing fairness..."
         ):
 
             state = optimize_schedule(
@@ -389,7 +436,7 @@ if skills_file and availability_file:
         )
 
         # =================================================
-        # PREVIEW
+        # BUILD PREVIEW
         # =================================================
 
         preview_rows = []
