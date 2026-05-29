@@ -6,28 +6,28 @@ def calculate_candidate_score(
     metrics,
 ):
 
-    served_count = metrics["served_counts"][volunteer]
+    served_count = metrics[
+        "served_counts"
+    ][volunteer]
 
-    reliability = (
-        (metrics["scheduled_counts"][volunteer] -
-         metrics["cancellations"][volunteer])
-        /
-        max(metrics["scheduled_counts"][volunteer], 1)
+    campus_count = metrics[
+        "campus_counts"
+    ][volunteer][campus]
+
+    fairness_penalty = (
+        served_count * 8
     )
 
-    campus_count = metrics["campus_counts"][volunteer][campus]
+    campus_penalty = (
+        campus_count * 2
+    )
 
-    fairness_penalty = served_count * 8
-
-    campus_penalty = campus_count * 2
-
-    proficiency_bonus = skill_level * 15
-
-    reliability_bonus = reliability * 10
+    proficiency_bonus = (
+        skill_level * 15
+    )
 
     score = (
         proficiency_bonus
-        + reliability_bonus
         - fairness_penalty
         - campus_penalty
     )
