@@ -52,7 +52,7 @@ This scheduler optimizes:
 - Skill proficiency
 - Campus distribution
 
-It also uses historical assignment data
+Historical assignment uploads are used
 to improve future fairness balancing.
 """)
 
@@ -105,6 +105,23 @@ if skills_file and availability_file:
 
         st.success("Files loaded successfully")
 
+        # =================================================
+        # DEBUGGING
+        # =================================================
+
+        st.markdown("## 🧪 Debug Info")
+
+        st.write("Skills Columns:")
+        st.write(skills_df.columns.tolist())
+
+        st.write("Availability Columns:")
+        st.write(availability_df.columns.tolist())
+
+        st.write("Skills Preview:")
+        st.dataframe(skills_df.head())
+
+        st.write("Availability Preview:")
+        st.dataframe(availability_df.head())
 
         # =================================================
         # BUILD HISTORICAL METRICS
@@ -122,13 +139,11 @@ if skills_file and availability_file:
             "Historical metrics built"
         )
 
-
         # =================================================
-        # INITIALIZE SCHEDULE STATE
+        # INITIALIZE STATE
         # =================================================
 
         state = ScheduleState()
-
 
         # =================================================
         # FIND DATE COLUMNS
@@ -141,9 +156,11 @@ if skills_file and availability_file:
             if c != "Name"
         ]
 
+        st.write("Detected Dates:")
+        st.write(availability_dates)
 
         # =================================================
-        # GENERATE INITIAL SCHEDULE
+        # GENERATE SCHEDULE
         # =================================================
 
         with st.spinner(
@@ -155,25 +172,28 @@ if skills_file and availability_file:
                 try:
 
                     weekday = datetime.strptime(
-                        date,
+                        str(date),
                         "%Y-%m-%d"
                     ).weekday()
 
-                except Exception:
+                except Exception as e:
+
+                    st.warning(
+                        f"Skipping invalid date column: {date}"
+                    )
+
                     continue
 
                 # =========================================
-                # DETERMINE SERVICE TYPE
+                # SERVICE TYPE
                 # =========================================
 
                 service_type = None
 
-                # Sunday
                 if weekday == 6:
 
                     service_type = "Sunday"
 
-                # Saturday / Prayer Night
                 elif weekday == 5:
 
                     service_type = "Prayer"
@@ -181,24 +201,26 @@ if skills_file and availability_file:
                 if service_type is None:
                     continue
 
-
-                # =========================================
-                # LOAD SERVICE CONFIG
-                # =========================================
-
                 config = SERVICE_CONFIG[
                     service_type
                 ]
-
 
                 # =========================================
                 # AVAILABLE PEOPLE
                 # =========================================
 
                 available_people = availability_df[
-                    availability_df[date] == "Yes"
+                    availability_df[date]
+                    .astype(str)
+                    .str.strip()
+                    .str.lower()
+                    == "yes"
                 ]["Name"].tolist()
 
+                st.write(
+                    f"{date} Available:",
+                    available_people
+                )
 
                 # =========================================
                 # PROCESS CAMPUSES
@@ -208,9 +230,8 @@ if skills_file and availability_file:
 
                     used_people = set()
 
-
                     # =====================================
-                    # PRIORITIZE IMPORTANT ROLES
+                    # PRIORITIZE ROLES
                     # =====================================
 
                     role_priority = sorted(
@@ -221,16 +242,14 @@ if skills_file and availability_file:
                         )
                     )
 
-
                     # =====================================
                     # PROCESS ROLES
                     # =====================================
 
                     for role in role_priority:
 
-
                         # =================================
-                        # DETERMINE SKILL COLUMN
+                        # SKILL COLUMN
                         # =================================
 
                         if role == "Director":
@@ -257,73 +276,59 @@ if skills_file and availability_file:
 
                         else:
 
-                            # Assistant fallback
                             skill_column = (
                                 f"Sound_{campus}"
                             )
 
+                        # =================================
+                        # CHECK COLUMN EXISTS
+                        # =================================
+
+                        if skill_column not in skills_df.columns:
+
+                            st.warning(
+                                f"Missing skill column: {skill_column}"
+                            )
+
+                            continue
 
                         # =================================
                         # ASSIGN ROLE
                         # =================================
 
                         selected = assign_role(
-                            assignments=state.assignments,
+
+                            state=state,
+
                             used_people=used_people,
+
                             candidates=available_people,
+
                             role=role,
+
                             campus=campus,
+
                             service_type=service_type,
+
                             date=date,
+
                             skill_column=skill_column,
+
                             skills_df=skills_df,
+
                             metrics=metrics
                         )
 
-
-                        # =================================
-                        # UPDATE STATE
-                        # =================================
-
-                        if selected:
-
-                            assignment = next(
-
-                                (
-                                    a for a in
-                                    state.assignments
-
-                                    if (
-                                        a.volunteer
-                                        == selected
-
-                                        and a.date
-                                        == date
-
-                                        and a.role
-                                        == role
-
-                                        and a.campus
-                                        == campus
-                                    )
-                                ),
-
-                                None
-                            )
-
-                            if assignment:
-
-                                state.add(
-                                    assignment
-                                )
+                        st.write(
+                            f"{date} | {campus} | {role} → {selected}"
+                        )
 
         st.success(
             "Initial schedule generation complete"
         )
 
-
         # =================================================
-        # OPTIMIZATION PASSES
+        # OPTIMIZATION
         # =================================================
 
         with st.spinner(
@@ -339,7 +344,6 @@ if skills_file and availability_file:
         st.success(
             "Optimization complete"
         )
-
 
         # =================================================
         # PREVIEW TABLE
@@ -367,6 +371,10 @@ if skills_file and availability_file:
                     a.volunteer
             })
 
+        st.write(
+            f"Total Assignments: {len(preview_rows)}"
+        )
+
         if preview_rows:
 
             preview_df = pd.DataFrame(
@@ -390,9 +398,14 @@ if skills_file and availability_file:
                 use_container_width=True
             )
 
+        else:
+
+            st.error(
+                "No assignments were generated."
+            )
 
         # =================================================
-        # EXPORT EXCEL
+        # EXPORT
         # =================================================
 
         with st.spinner(
@@ -406,7 +419,6 @@ if skills_file and availability_file:
         st.success(
             "Schedule successfully generated"
         )
-
 
         # =================================================
         # DOWNLOAD BUTTON
@@ -429,9 +441,8 @@ if skills_file and availability_file:
             )
         )
 
-
         # =================================================
-        # HISTORICAL METRICS DASHBOARD
+        # HISTORICAL METRICS
         # =================================================
 
         st.markdown(
@@ -482,9 +493,8 @@ if skills_file and availability_file:
         else:
 
             st.info(
-                "No historical assignment data uploaded."
+                "No historical schedule uploaded."
             )
-
 
     except Exception as e:
 
