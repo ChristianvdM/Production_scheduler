@@ -1,45 +1,85 @@
 from collections import defaultdict
 
 
-def build_historical_metrics(history):
+# =========================================================
+# BUILD HISTORICAL METRICS
+# =========================================================
+
+def build_historical_metrics(
+    history
+):
 
     metrics = {
+
+        # =============================================
+        # TOTAL SERVES
+        # =============================================
 
         "served_counts":
             defaultdict(int),
 
+        # =============================================
+        # CAMPUS SERVES
+        # KEY:
+        # (volunteer, campus)
+        # =============================================
+
         "campus_counts":
-            defaultdict(
-                lambda: defaultdict(int)
-            ),
+            defaultdict(int),
 
-        "role_counts":
-            defaultdict(
-                lambda: defaultdict(int)
-            ),
+        # =============================================
+        # SUNDAY COUNTS
+        # =============================================
 
-        "service_counts":
-            defaultdict(
-                lambda: defaultdict(int)
-            ),
+        "sunday_counts":
+            defaultdict(int)
     }
 
-    for item in history:
+    # =================================================
+    # LOAD HISTORICAL DATA
+    # =================================================
+
+    for assignment in history:
+
+        volunteer = (
+            assignment.volunteer
+        )
+
+        campus = (
+            assignment.campus
+        )
+
+        service_type = (
+            assignment.service_type
+        )
+
+        # =============================================
+        # TOTAL SERVES
+        # =============================================
 
         metrics["served_counts"][
-            item.volunteer
+            volunteer
         ] += 1
 
+        # =============================================
+        # CAMPUS SERVES
+        # =============================================
+
         metrics["campus_counts"][
-            item.volunteer
-        ][item.campus] += 1
+            (
+                volunteer,
+                campus
+            )
+        ] += 1
 
-        metrics["role_counts"][
-            item.volunteer
-        ][item.role] += 1
+        # =============================================
+        # SUNDAY COUNTS
+        # =============================================
 
-        metrics["service_counts"][
-            item.volunteer
-        ][item.service_type] += 1
+        if "Sunday" in service_type:
+
+            metrics["sunday_counts"][
+                volunteer
+            ] += 1
 
     return metrics
