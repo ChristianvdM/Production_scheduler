@@ -1,6 +1,9 @@
 from dataclasses import dataclass
-from typing import Dict
 
+
+# =========================================================
+# ASSIGNMENT MODEL
+# =========================================================
 
 @dataclass
 class Assignment:
@@ -11,6 +14,10 @@ class Assignment:
     date: str
 
 
+# =========================================================
+# HISTORICAL ASSIGNMENT MODEL
+# =========================================================
+
 @dataclass
 class HistoricalAssignment:
     volunteer: str
@@ -20,9 +27,18 @@ class HistoricalAssignment:
     date: str
 
 
+# =========================================================
+# SERVICE CONFIGURATION
+# =========================================================
+
 SERVICE_CONFIG = {
 
+    # =====================================================
+    # SUNDAY SERVICES
+    # =====================================================
+
     "Sunday": {
+
         "campuses": [
             "Tygerberg",
             "Stellies",
@@ -30,6 +46,7 @@ SERVICE_CONFIG = {
         ],
 
         "roles": [
+
             "Director",
 
             "Sound Main",
@@ -43,17 +60,31 @@ SERVICE_CONFIG = {
         ]
     },
 
+    # =====================================================
+    # PRAYER NIGHTS
+    # =====================================================
+
     "Prayer": {
+
         "campuses": [
             "Tygerberg"
         ],
 
         "roles": [
+
             "Director",
+
             "Sound",
+
             "Lights",
+
             "Resi",
-            "Assistant"
+
+            "Assistant",
+
+            # NEW
+            "Production Setup 1",
+            "Production Setup 2"
         ]
     }
 }
