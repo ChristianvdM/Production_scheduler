@@ -36,7 +36,7 @@ def export_schedule(assignments):
     ) as writer:
 
         # =================================================
-        # FULL RAW SCHEDULE
+        # FULL SCHEDULE
         # =================================================
 
         df.to_excel(
@@ -46,171 +46,111 @@ def export_schedule(assignments):
         )
 
         # =================================================
-        # SUNDAY SERVICES
+        # ONE SHEET PER SERVICE
         # =================================================
 
-        sunday_df = df[
-            df["Service"] == "Sunday"
-        ]
+        unique_dates = df["Date"].unique()
 
-        if not sunday_df.empty:
+        for service_date in unique_dates:
 
-            role_order = [
-
-                "Director",
-
-                "Sound Main",
-                "Sound Assistant",
-
-                "Lights Main",
-                "Lights Assistant",
-
-                "Resi Main",
-                "Resi Assistant"
+            service_df = df[
+                df["Date"] == service_date
             ]
 
-            campuses = sorted(
-                sunday_df["Campus"].unique()
-            )
+            sheet_name = (
+                str(service_date)
+                .replace("/", "-")
+            )[:31]
 
-            combined = pd.DataFrame()
+            export_rows = []
+
+            campuses = service_df[
+                "Campus"
+            ].unique()
 
             for campus in campuses:
 
-                campus_df = sunday_df[
-                    sunday_df["Campus"] == campus
+                campus_df = service_df[
+                    service_df["Campus"]
+                    == campus
                 ]
 
-                pivot = campus_df.pivot_table(
+                export_rows.append({
+                    "Role": f"{campus}",
+                    "Volunteer": ""
+                })
 
-                    index="Role",
+                for _, row in (
+                    campus_df.iterrows()
+                ):
 
-                    columns="Date",
+                    export_rows.append({
 
-                    values="Volunteer",
+                        "Role":
+                            row["Role"],
 
-                    aggfunc="first"
-                )
+                        "Volunteer":
+                            row["Volunteer"]
+                    })
 
-                pivot = pivot.reindex(
-                    role_order
-                )
+                export_rows.append({
+                    "Role": "",
+                    "Volunteer": ""
+                })
 
-                pivot = pivot.reset_index()
+            export_df = pd.DataFrame(
+                export_rows
+            )
 
-                spacer = pd.DataFrame(
-                    [[""] * len(pivot.columns)],
-                    columns=pivot.columns
-                )
+            export_df.to_excel(
 
-                title = pd.DataFrame(
-
-                    [[f"{campus} Sunday Services"]
-                     + [""] * (
-                        len(pivot.columns) - 1
-                    )],
-
-                    columns=pivot.columns
-                )
-
-                combined = pd.concat([
-                    combined,
-                    title,
-                    pivot,
-                    spacer
-                ])
-
-            combined.to_excel(
                 writer,
-                sheet_name="Sunday Services",
+
+                sheet_name=sheet_name,
+
                 index=False
             )
 
         # =================================================
-        # PRAYER NIGHTS
+        # SUMMARY
         # =================================================
 
-        prayer_df = df[
-            df["Service"] == "Prayer"
+        summary = (
+
+            df.groupby(
+                ["Volunteer", "Campus"]
+            )
+
+            .size()
+
+            .unstack(fill_value=0)
+
+            .reset_index()
+        )
+
+        campus_cols = [
+
+            c for c in summary.columns
+
+            if c != "Volunteer"
         ]
 
-        if not prayer_df.empty:
+        summary[
+            "Total Assignments"
+        ] = summary[
+            campus_cols
+        ].sum(axis=1)
 
-            prayer_roles = [
+        summary = summary.sort_values(
+            by="Total Assignments",
+            ascending=False
+        )
 
-                "Director",
-
-                "Sound",
-
-                "Lights",
-
-                "Resi",
-
-                "Assistant"
-            ]
-
-            pivot = prayer_df.pivot_table(
-
-                index="Role",
-
-                columns="Date",
-
-                values="Volunteer",
-
-                aggfunc="first"
-            )
-
-            pivot = pivot.reindex(
-                prayer_roles
-            )
-
-            pivot.to_excel(
-                writer,
-                sheet_name="Prayer Nights"
-            )
-
-        # =================================================
-        # SUMMARY SHEET
-        # =================================================
-
-        if not df.empty:
-
-            summary = (
-
-                df.groupby(
-                    ["Volunteer", "Campus"]
-                )
-
-                .size()
-
-                .unstack(fill_value=0)
-
-                .reset_index()
-            )
-
-            campus_cols = [
-
-                c for c in summary.columns
-
-                if c != "Volunteer"
-            ]
-
-            summary[
-                "Total Assignments"
-            ] = summary[
-                campus_cols
-            ].sum(axis=1)
-
-            summary = summary.sort_values(
-                by="Total Assignments",
-                ascending=False
-            )
-
-            summary.to_excel(
-                writer,
-                sheet_name="Summary",
-                index=False
-            )
+        summary.to_excel(
+            writer,
+            sheet_name="Summary",
+            index=False
+        )
 
         # =================================================
         # AUTO WIDTHS
@@ -226,17 +166,13 @@ def export_schedule(assignments):
 
                 current_df = summary
 
-            elif sheet_name == "Prayer Nights":
+            elif sheet_name == "Full Schedule":
 
-                current_df = pivot.reset_index()
-
-            elif sheet_name == "Sunday Services":
-
-                current_df = combined
+                current_df = df
 
             else:
 
-                current_df = df
+                current_df = export_df
 
             for idx, col in enumerate(
                 current_df.columns
@@ -253,7 +189,7 @@ def export_schedule(assignments):
 
                         len(str(col))
 
-                    ) + 2
+                    ) + 3
 
                 except:
 
