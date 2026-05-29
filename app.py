@@ -314,18 +314,14 @@ if skills_file and availability_file:
                                 f"Resi_{campus}"
                             )
 
-                        elif "Runner" in role:
-
-                            # Runner uses
-                            # sound skill
-                            # as proxy
-
-                            skill_column = (
-                                f"Sound_{campus}"
-                            )
-
-                        else:
-
+                        elif (
+                            "Production Setup" in role
+                            or "Runner" in role
+                        ):
+                        
+                            # Setup volunteers use
+                            # sound skill as proxy
+                        
                             skill_column = (
                                 f"Sound_{campus}"
                             )
