@@ -49,6 +49,11 @@ This scheduler optimizes:
 - Role coverage
 - Skill proficiency
 - Campus distribution
+
+Rules:
+- Highly skilled volunteers are protected from assistant roles
+- Prayer nights include setup volunteers
+- Historical schedules improve future fairness
 """)
 
 
@@ -162,7 +167,7 @@ if skills_file and availability_file:
                 ]
 
                 # =========================================
-                # FIND AVAILABLE PEOPLE
+                # AVAILABLE PEOPLE
                 # =========================================
 
                 available_values = (
@@ -176,6 +181,7 @@ if skills_file and availability_file:
                 available_people = availability_df[
 
                     available_values.isin([
+
                         "yes",
                         "y",
                         "true",
@@ -195,13 +201,17 @@ if skills_file and availability_file:
                     used_people = set()
 
                     # =====================================
-                    # PRIORITY ORDER
+                    # PRIORITIZE IMPORTANT ROLES
                     # =====================================
 
                     role_priority = sorted(
+
                         config["roles"],
+
                         key=lambda r: (
+
                             "Director" not in r,
+
                             "Main" not in r
                         )
                     )
@@ -213,12 +223,14 @@ if skills_file and availability_file:
                     for role in role_priority:
 
                         # =================================
-                        # MAP ROLE -> SKILL COLUMN
+                        # MAP ROLE TO SKILL COLUMN
                         # =================================
 
                         if role == "Director":
 
-                            skill_column = "Director"
+                            skill_column = (
+                                "Director"
+                            )
 
                         elif "Sound" in role:
 
@@ -238,6 +250,19 @@ if skills_file and availability_file:
                                 f"Resi_{campus}"
                             )
 
+                        elif (
+                            "Production Setup"
+                            in role
+                        ):
+
+                            # Setup volunteers
+                            # use sound skill
+                            # as proxy
+
+                            skill_column = (
+                                f"Sound_{campus}"
+                            )
+
                         else:
 
                             skill_column = (
@@ -245,7 +270,7 @@ if skills_file and availability_file:
                             )
 
                         # =================================
-                        # SKIP MISSING COLUMNS
+                        # SKIP INVALID COLUMNS
                         # =================================
 
                         if (
@@ -286,7 +311,7 @@ if skills_file and availability_file:
         )
 
         # =================================================
-        # OPTIMIZATION PASSES
+        # OPTIMIZATION
         # =================================================
 
         with st.spinner(
@@ -294,8 +319,11 @@ if skills_file and availability_file:
         ):
 
             state = optimize_schedule(
+
                 state=state,
+
                 metrics=metrics,
+
                 iterations=200
             )
 
@@ -340,6 +368,7 @@ if skills_file and availability_file:
             )
 
             preview_df = preview_df.sort_values(
+
                 by=[
                     "Date",
                     "Campus",
@@ -360,9 +389,10 @@ if skills_file and availability_file:
 
             st.info("""
 Possible reasons:
-- Availability cells do not contain recognised values
+- No recognised availability values
 - Skill levels are all 0
-- Skill columns do not match expected naming
+- Skill columns missing
+- Nobody available for required roles
 """)
 
         # =================================================
