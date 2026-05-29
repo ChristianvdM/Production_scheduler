@@ -9,11 +9,9 @@ from io import BytesIO
 
 def export_schedule(assignments):
 
-    rows = []
+    output = BytesIO()
 
-    # =====================================================
-    # BUILD ROWS
-    # =====================================================
+    rows = []
 
     for a in assignments:
 
@@ -23,24 +21,14 @@ def export_schedule(assignments):
 
             "Campus": a.campus,
 
-            "ServiceType": a.service_type,
+            "Service": a.service_type,
 
             "Role": a.role,
 
             "Volunteer": a.volunteer
         })
 
-    # =====================================================
-    # CREATE DATAFRAME
-    # =====================================================
-
     df = pd.DataFrame(rows)
-
-    output = BytesIO()
-
-    # =====================================================
-    # EXCEL EXPORT
-    # =====================================================
 
     with pd.ExcelWriter(
         output,
@@ -48,14 +36,138 @@ def export_schedule(assignments):
     ) as writer:
 
         # =================================================
-        # MAIN SCHEDULE SHEET
+        # FULL RAW SCHEDULE
         # =================================================
 
         df.to_excel(
             writer,
-            sheet_name="Schedule",
+            sheet_name="Full Schedule",
             index=False
         )
+
+        # =================================================
+        # SUNDAY SERVICES
+        # =================================================
+
+        sunday_df = df[
+            df["Service"] == "Sunday"
+        ]
+
+        if not sunday_df.empty:
+
+            role_order = [
+
+                "Director",
+
+                "Sound Main",
+                "Sound Assistant",
+
+                "Lights Main",
+                "Lights Assistant",
+
+                "Resi Main",
+                "Resi Assistant"
+            ]
+
+            campuses = sorted(
+                sunday_df["Campus"].unique()
+            )
+
+            combined = pd.DataFrame()
+
+            for campus in campuses:
+
+                campus_df = sunday_df[
+                    sunday_df["Campus"] == campus
+                ]
+
+                pivot = campus_df.pivot_table(
+
+                    index="Role",
+
+                    columns="Date",
+
+                    values="Volunteer",
+
+                    aggfunc="first"
+                )
+
+                pivot = pivot.reindex(
+                    role_order
+                )
+
+                pivot = pivot.reset_index()
+
+                spacer = pd.DataFrame(
+                    [[""] * len(pivot.columns)],
+                    columns=pivot.columns
+                )
+
+                title = pd.DataFrame(
+
+                    [[f"{campus} Sunday Services"]
+                     + [""] * (
+                        len(pivot.columns) - 1
+                    )],
+
+                    columns=pivot.columns
+                )
+
+                combined = pd.concat([
+                    combined,
+                    title,
+                    pivot,
+                    spacer
+                ])
+
+            combined.to_excel(
+                writer,
+                sheet_name="Sunday Services",
+                index=False
+            )
+
+        # =================================================
+        # PRAYER NIGHTS
+        # =================================================
+
+        prayer_df = df[
+            df["Service"] == "Prayer"
+        ]
+
+        if not prayer_df.empty:
+
+            prayer_roles = [
+
+                "Director",
+
+                "Sound",
+
+                "Lights",
+
+                "Resi",
+
+                "Assistant"
+            ]
+
+            pivot = prayer_df.pivot_table(
+
+                index="Role",
+
+                columns="Date",
+
+                values="Volunteer",
+
+                aggfunc="first"
+            )
+
+            pivot = pivot.reindex(
+                prayer_roles
+            )
+
+            pivot.to_excel(
+                writer,
+                sheet_name="Prayer Nights"
+            )
 
         # =================================================
         # SUMMARY SHEET
@@ -76,7 +188,7 @@ def export_schedule(assignments):
                 .reset_index()
             )
 
-            campus_columns = [
+            campus_cols = [
 
                 c for c in summary.columns
 
@@ -86,7 +198,7 @@ def export_schedule(assignments):
             summary[
                 "Total Assignments"
             ] = summary[
-                campus_columns
+                campus_cols
             ].sum(axis=1)
 
             summary = summary.sort_values(
@@ -101,7 +213,7 @@ def export_schedule(assignments):
             )
 
         # =================================================
-        # AUTO COLUMN WIDTHS
+        # AUTO WIDTHS
         # =================================================
 
         for sheet_name in writer.sheets:
@@ -110,25 +222,42 @@ def export_schedule(assignments):
                 sheet_name
             ]
 
-            current_df = (
-                df if sheet_name == "Schedule"
-                else summary
-            )
+            if sheet_name == "Summary":
+
+                current_df = summary
+
+            elif sheet_name == "Prayer Nights":
+
+                current_df = pivot.reset_index()
+
+            elif sheet_name == "Sunday Services":
+
+                current_df = combined
+
+            else:
+
+                current_df = df
 
             for idx, col in enumerate(
                 current_df.columns
             ):
 
-                max_len = max(
+                try:
 
-                    current_df[col]
-                    .astype(str)
-                    .map(len)
-                    .max(),
+                    max_len = max(
 
-                    len(str(col))
+                        current_df[col]
+                        .astype(str)
+                        .map(len)
+                        .max(),
 
-                ) + 2
+                        len(str(col))
+
+                    ) + 2
+
+                except:
+
+                    max_len = 20
 
                 worksheet.set_column(
                     idx,
