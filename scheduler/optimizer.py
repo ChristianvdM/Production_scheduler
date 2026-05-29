@@ -24,9 +24,10 @@ def get_skill(
     if row.empty:
         return 0
 
-    value = row[column].values[0]
-
     try:
+
+        value = row[column].values[0]
+
         return int(value)
 
     except:
@@ -62,7 +63,6 @@ def rank_candidates(
             skill_column
         )
 
-        # Require at least level 1
         if skill_level <= 0:
             continue
 
@@ -165,10 +165,6 @@ def assign_role(
             date=date
         )
 
-        # =============================================
-        # ADD DIRECTLY TO STATE
-        # =============================================
-
         state.add(
             assignment
         )
@@ -176,10 +172,6 @@ def assign_role(
         used_people.add(
             selected
         )
-
-        # =============================================
-        # UPDATE METRICS
-        # =============================================
 
         metrics["served_counts"][
             selected
