@@ -50,11 +50,13 @@ def is_assistant_role(role):
 # RUNNER CHECK
 # =========================================================
 
-def is_runner_role(role):
+def is_setup_role(role):
+
+    role = str(role).lower()
 
     return (
-        "runner"
-        in str(role).lower()
+        "production setup" in role
+        or "runner" in role
     )
 
 
