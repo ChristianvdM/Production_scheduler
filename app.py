@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 
-from datetime import datetime
-
 from scheduler.loaders import (
     load_skills,
     load_availability,
@@ -51,9 +49,6 @@ This scheduler optimizes:
 - Role coverage
 - Skill proficiency
 - Campus distribution
-
-Historical assignment uploads are used
-to improve future fairness balancing.
 """)
 
 
@@ -106,37 +101,11 @@ if skills_file and availability_file:
         st.success("Files loaded successfully")
 
         # =================================================
-        # DEBUGGING
+        # BUILD METRICS
         # =================================================
 
-        st.markdown("## 🧪 Debug Info")
-
-        st.write("Skills Columns:")
-        st.write(skills_df.columns.tolist())
-
-        st.write("Availability Columns:")
-        st.write(availability_df.columns.tolist())
-
-        st.write("Skills Preview:")
-        st.dataframe(skills_df.head())
-
-        st.write("Availability Preview:")
-        st.dataframe(availability_df.head())
-
-        # =================================================
-        # BUILD HISTORICAL METRICS
-        # =================================================
-
-        with st.spinner(
-            "Building historical metrics..."
-        ):
-
-            metrics = build_historical_metrics(
-                history
-            )
-
-        st.success(
-            "Historical metrics built"
+        metrics = build_historical_metrics(
+            history
         )
 
         # =================================================
@@ -146,18 +115,18 @@ if skills_file and availability_file:
         state = ScheduleState()
 
         # =================================================
-        # FIND DATE COLUMNS
+        # FIND SERVICE COLUMNS
         # =================================================
 
         availability_dates = [
 
             c for c in availability_df.columns
 
-            if c != "Name"
+            if str(c).strip() not in [
+                "",
+                "Name"
+            ]
         ]
-
-        st.write("Detected Dates:")
-        st.write(availability_dates)
 
         # =================================================
         # GENERATE SCHEDULE
@@ -169,34 +138,21 @@ if skills_file and availability_file:
 
             for date in availability_dates:
 
-                try:
-
-                    weekday = datetime.strptime(
-                        str(date),
-                        "%Y-%m-%d"
-                    ).weekday()
-
-                except Exception as e:
-
-                    st.warning(
-                        f"Skipping invalid date column: {date}"
-                    )
-
-                    continue
+                date_str = str(date).strip()
 
                 # =========================================
-                # SERVICE TYPE
+                # DETERMINE SERVICE TYPE
                 # =========================================
 
                 service_type = None
 
-                if weekday == 6:
-
-                    service_type = "Sunday"
-
-                elif weekday == 5:
+                if "Prayer" in date_str:
 
                     service_type = "Prayer"
+
+                elif "Services" in date_str:
+
+                    service_type = "Sunday"
 
                 if service_type is None:
                     continue
@@ -217,11 +173,6 @@ if skills_file and availability_file:
                     == "yes"
                 ]["Name"].tolist()
 
-                st.write(
-                    f"{date} Available:",
-                    available_people
-                )
-
                 # =========================================
                 # PROCESS CAMPUSES
                 # =========================================
@@ -231,7 +182,7 @@ if skills_file and availability_file:
                     used_people = set()
 
                     # =====================================
-                    # PRIORITIZE ROLES
+                    # PRIORITIZE MAIN ROLES
                     # =====================================
 
                     role_priority = sorted(
@@ -281,22 +232,20 @@ if skills_file and availability_file:
                             )
 
                         # =================================
-                        # CHECK COLUMN EXISTS
+                        # SKIP MISSING COLUMNS
                         # =================================
 
-                        if skill_column not in skills_df.columns:
-
-                            st.warning(
-                                f"Missing skill column: {skill_column}"
-                            )
-
+                        if (
+                            skill_column
+                            not in skills_df.columns
+                        ):
                             continue
 
                         # =================================
                         # ASSIGN ROLE
                         # =================================
 
-                        selected = assign_role(
+                        assign_role(
 
                             state=state,
 
@@ -310,17 +259,13 @@ if skills_file and availability_file:
 
                             service_type=service_type,
 
-                            date=date,
+                            date=date_str,
 
                             skill_column=skill_column,
 
                             skills_df=skills_df,
 
                             metrics=metrics
-                        )
-
-                        st.write(
-                            f"{date} | {campus} | {role} → {selected}"
                         )
 
         st.success(
@@ -331,18 +276,10 @@ if skills_file and availability_file:
         # OPTIMIZATION
         # =================================================
 
-        with st.spinner(
-            "Optimizing schedule..."
-        ):
-
-            state = optimize_schedule(
-                state=state,
-                metrics=metrics,
-                iterations=500
-            )
-
-        st.success(
-            "Optimization complete"
+        state = optimize_schedule(
+            state=state,
+            metrics=metrics,
+            iterations=200
         )
 
         # =================================================
@@ -371,8 +308,8 @@ if skills_file and availability_file:
                     a.volunteer
             })
 
-        st.write(
-            f"Total Assignments: {len(preview_rows)}"
+        st.markdown(
+            "## 📋 Schedule Preview"
         )
 
         if preview_rows:
@@ -389,10 +326,6 @@ if skills_file and availability_file:
                 ]
             )
 
-            st.markdown(
-                "## 📋 Schedule Preview"
-            )
-
             st.dataframe(
                 preview_df,
                 use_container_width=True
@@ -400,29 +333,17 @@ if skills_file and availability_file:
 
         else:
 
-            st.error(
-                "No assignments were generated."
+            st.warning(
+                "No assignments generated."
             )
 
         # =================================================
         # EXPORT
         # =================================================
 
-        with st.spinner(
-            "Building Excel export..."
-        ):
-
-            excel_data = export_schedule(
-                state.assignments
-            )
-
-        st.success(
-            "Schedule successfully generated"
+        excel_data = export_schedule(
+            state.assignments
         )
-
-        # =================================================
-        # DOWNLOAD BUTTON
-        # =================================================
 
         st.download_button(
 
@@ -442,58 +363,76 @@ if skills_file and availability_file:
         )
 
         # =================================================
-        # HISTORICAL METRICS
+        # SUMMARY STATS
         # =================================================
 
         st.markdown(
-            "## 📊 Historical Assignment Metrics"
+            "## 📊 Assignment Summary"
         )
 
-        served_counts = metrics[
-            "served_counts"
-        ]
+        if preview_rows:
 
-        dashboard_rows = []
-
-        volunteers = sorted(
-            served_counts.keys()
-        )
-
-        for volunteer in volunteers:
-
-            served = served_counts[
-                volunteer
-            ]
-
-            dashboard_rows.append({
-
-                "Volunteer":
-                    volunteer,
-
-                "Historical Assignments":
-                    served
-            })
-
-        if dashboard_rows:
-
-            metrics_df = pd.DataFrame(
-                dashboard_rows
-            )
-
-            metrics_df = metrics_df.sort_values(
-                by="Historical Assignments",
-                ascending=False
+            summary_df = (
+                preview_df
+                .groupby("Volunteer")
+                .size()
+                .reset_index(
+                    name="Assignments"
+                )
+                .sort_values(
+                    by="Assignments",
+                    ascending=False
+                )
             )
 
             st.dataframe(
-                metrics_df,
+                summary_df,
                 use_container_width=True
             )
 
-        else:
+        # =================================================
+        # HISTORICAL METRICS
+        # =================================================
 
-            st.info(
-                "No historical schedule uploaded."
+        if history:
+
+            st.markdown(
+                "## 📚 Historical Assignment Metrics"
+            )
+
+            served_counts = metrics[
+                "served_counts"
+            ]
+
+            historical_rows = []
+
+            for volunteer, count in (
+                served_counts.items()
+            ):
+
+                historical_rows.append({
+
+                    "Volunteer":
+                        volunteer,
+
+                    "Historical Assignments":
+                        count
+                })
+
+            historical_df = pd.DataFrame(
+                historical_rows
+            )
+
+            historical_df = (
+                historical_df.sort_values(
+                    by="Historical Assignments",
+                    ascending=False
+                )
+            )
+
+            st.dataframe(
+                historical_df,
+                use_container_width=True
             )
 
     except Exception as e:
