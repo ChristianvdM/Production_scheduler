@@ -53,7 +53,10 @@ This scheduler optimizes:
 Rules:
 - Volunteers cannot serve on two campuses on the same day
 - High-skilled operators cannot serve as assistants
-- Prayer nights include two runners/setup volunteers
+- Prayer nights include two runners
+- Volunteers must exist in BOTH:
+  - skills file
+  - availability file
 """)
 
 
@@ -102,6 +105,24 @@ if skills_file and availability_file:
             history = load_actual_schedule(
                 actual_schedule_file
             )
+
+        # =================================================
+        # NORMALIZE NAMES
+        # =================================================
+
+        skills_df["Name"] = (
+
+            skills_df["Name"]
+            .astype(str)
+            .str.strip()
+        )
+
+        availability_df["Name"] = (
+
+            availability_df["Name"]
+            .astype(str)
+            .str.strip()
+        )
 
         st.success("Files loaded successfully")
 
@@ -207,7 +228,25 @@ if skills_file and availability_file:
                         "x"
                     ])
 
-                ]["Name"].tolist()
+                ]["Name"].astype(str).str.strip().tolist()
+
+                # =========================================
+                # ONLY USE PEOPLE IN BOTH FILES
+                # =========================================
+
+                skills_people = set(
+
+                    skills_df["Name"]
+                    .astype(str)
+                    .str.strip()
+                )
+
+                available_people = [
+
+                    p for p in available_people
+
+                    if p in skills_people
+                ]
 
                 # =========================================
                 # PROCESS CONFIGS
@@ -277,8 +316,10 @@ if skills_file and availability_file:
 
                         elif "Runner" in role:
 
-                            # Use sound as
-                            # general proxy
+                            # Runner uses
+                            # sound skill
+                            # as proxy
+
                             skill_column = (
                                 f"Sound_{campus}"
                             )
