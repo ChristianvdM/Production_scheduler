@@ -35,7 +35,7 @@ def get_skill(
 
 
 # =========================================================
-# ASSISTANT CHECK
+# ROLE HELPERS
 # =========================================================
 
 def is_assistant_role(role):
@@ -46,18 +46,41 @@ def is_assistant_role(role):
     )
 
 
-# =========================================================
-# RUNNER CHECK
-# =========================================================
+def is_runner_role(role):
+
+    return (
+        "runner"
+        in str(role).lower()
+    )
+
 
 def is_setup_role(role):
 
-    role = str(role).lower()
-
     return (
-        "production setup" in role
-        or "runner" in role
+        "production setup"
+        in str(role).lower()
     )
+
+
+# =========================================================
+# SAME DAY CHECK
+# =========================================================
+
+def already_scheduled_same_day(
+    state,
+    volunteer,
+    date
+):
+
+    for assignment in state.assignments:
+
+        if (
+            assignment.volunteer == volunteer
+            and assignment.date == date
+        ):
+            return True
+
+    return False
 
 
 # =========================================================
@@ -83,6 +106,10 @@ def rank_candidates(
 
     for volunteer in candidates:
 
+        # =============================================
+        # ROLE SKILL
+        # =============================================
+
         skill_level = get_skill(
             skills_df,
             volunteer,
@@ -90,16 +117,42 @@ def rank_candidates(
         )
 
         # =============================================
-        # RUNNERS PREFER LOWER SKILLS
+        # DIRECTOR SKILL
         # =============================================
 
-        if is_setup_role(role):
+        director_skill = get_skill(
+            skills_df,
+            volunteer,
+            "Director"
+        )
+
+        # =============================================
+        # RUNNERS / SETUP
+        # =============================================
+
+        if (
+            is_runner_role(role)
+            or is_setup_role(role)
+        ):
+
+            # =========================================
+            # DIRECTOR LEVEL 3 CANNOT DO:
+            # - runners
+            # - setup
+            # =========================================
+
+            if director_skill >= 3:
+                continue
 
             adjusted_skill = (
                 6 - skill_level
             )
 
         else:
+
+            # =========================================
+            # REQUIRE BASIC SKILL
+            # =========================================
 
             if skill_level <= 0:
                 continue
@@ -114,7 +167,22 @@ def rank_candidates(
             ):
                 continue
 
+            # =========================================
+            # DIRECTOR LEVEL 3
+            # CANNOT ASSIST
+            # =========================================
+
+            if (
+                is_assistant_role(role)
+                and director_skill >= 3
+            ):
+                continue
+
             adjusted_skill = skill_level
+
+        # =============================================
+        # CALCULATE SCORE
+        # =============================================
 
         score = calculate_candidate_score(
 
@@ -136,6 +204,10 @@ def rank_candidates(
             )
         )
 
+    # ================================================
+    # SORT BEST FIRST
+    # ================================================
+
     ranked.sort(
         key=lambda x: x[1],
         reverse=True
@@ -145,27 +217,6 @@ def rank_candidates(
         r[0]
         for r in ranked
     ]
-
-
-# =========================================================
-# CHECK SAME-DAY CONFLICTS
-# =========================================================
-
-def already_scheduled_same_day(
-    state,
-    volunteer,
-    date
-):
-
-    for assignment in state.assignments:
-
-        if (
-            assignment.volunteer == volunteer
-            and assignment.date == date
-        ):
-            return True
-
-    return False
 
 
 # =========================================================
@@ -210,6 +261,10 @@ def assign_role(
         metrics=metrics
     )
 
+    # =====================================================
+    # FIND FIRST VALID PERSON
+    # =====================================================
+
     selected = next(
 
         (
@@ -228,6 +283,10 @@ def assign_role(
 
         None
     )
+
+    # =====================================================
+    # CREATE ASSIGNMENT
+    # =====================================================
 
     if selected:
 
@@ -252,8 +311,19 @@ def assign_role(
             selected
         )
 
+        # =================================================
+        # UPDATE METRICS
+        # =================================================
+
         metrics["served_counts"][
             selected
+        ] += 1
+
+        metrics["campus_counts"][
+            (
+                selected,
+                campus
+            )
         ] += 1
 
     return selected
