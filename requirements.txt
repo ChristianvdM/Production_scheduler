@@ -1,6 +1,6 @@
 streamlit
 pandas
 numpy
-openpyxl
 xlsxwriter
-odfpy
+openpyxl
+pyexcel-ods3
