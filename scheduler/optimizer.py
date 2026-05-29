@@ -35,6 +35,31 @@ def get_skill(
 
 
 # =========================================================
+# ASSISTANT ROLE CHECK
+# =========================================================
+
+def is_assistant_role(role):
+
+    role = str(role).lower()
+
+    return (
+        "assistant" in role
+    )
+
+
+# =========================================================
+# PRODUCTION SETUP ROLE CHECK
+# =========================================================
+
+def is_production_setup_role(role):
+
+    return (
+        "production setup"
+        in str(role).lower()
+    )
+
+
+# =========================================================
 # RANK CANDIDATES
 # =========================================================
 
@@ -63,8 +88,39 @@ def rank_candidates(
             skill_column
         )
 
+        # =============================================
+        # REQUIRE BASIC SKILL
+        # =============================================
+
         if skill_level <= 0:
             continue
+
+        # =============================================
+        # NEW RULE:
+        # HIGH SKILL CANNOT DO ASSISTANT
+        # =============================================
+
+        if (
+            is_assistant_role(role)
+            and skill_level > 2
+        ):
+            continue
+
+        # =============================================
+        # NEW RULE:
+        # PRODUCTION SETUP PREFERS LOW SKILL
+        # =============================================
+
+        if is_production_setup_role(role):
+
+            # Strong preference for lower skill
+            adjusted_skill = (
+                6 - skill_level
+            )
+
+        else:
+
+            adjusted_skill = skill_level
 
         score = calculate_candidate_score(
 
@@ -74,7 +130,7 @@ def rank_candidates(
 
             campus=campus,
 
-            skill_level=skill_level,
+            skill_level=adjusted_skill,
 
             metrics=metrics
         )
