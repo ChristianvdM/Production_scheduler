@@ -35,26 +35,25 @@ def get_skill(
 
 
 # =========================================================
-# ASSISTANT ROLE CHECK
+# ASSISTANT CHECK
 # =========================================================
 
 def is_assistant_role(role):
 
-    role = str(role).lower()
-
     return (
-        "assistant" in role
+        "assistant"
+        in str(role).lower()
     )
 
 
 # =========================================================
-# PRODUCTION SETUP ROLE CHECK
+# RUNNER CHECK
 # =========================================================
 
-def is_production_setup_role(role):
+def is_runner_role(role):
 
     return (
-        "production setup"
+        "runner"
         in str(role).lower()
     )
 
@@ -89,36 +88,29 @@ def rank_candidates(
         )
 
         # =============================================
-        # REQUIRE BASIC SKILL
+        # RUNNERS PREFER LOWER SKILLS
         # =============================================
 
-        if skill_level <= 0:
-            continue
+        if is_runner_role(role):
 
-        # =============================================
-        # NEW RULE:
-        # HIGH SKILL CANNOT DO ASSISTANT
-        # =============================================
-
-        if (
-            is_assistant_role(role)
-            and skill_level > 2
-        ):
-            continue
-
-        # =============================================
-        # NEW RULE:
-        # PRODUCTION SETUP PREFERS LOW SKILL
-        # =============================================
-
-        if is_production_setup_role(role):
-
-            # Strong preference for lower skill
             adjusted_skill = (
                 6 - skill_level
             )
 
         else:
+
+            if skill_level <= 0:
+                continue
+
+            # =========================================
+            # HIGH SKILL CANNOT ASSIST
+            # =========================================
+
+            if (
+                is_assistant_role(role)
+                and skill_level > 2
+            ):
+                continue
 
             adjusted_skill = skill_level
 
@@ -151,6 +143,27 @@ def rank_candidates(
         r[0]
         for r in ranked
     ]
+
+
+# =========================================================
+# CHECK SAME-DAY CONFLICTS
+# =========================================================
+
+def already_scheduled_same_day(
+    state,
+    volunteer,
+    date
+):
+
+    for assignment in state.assignments:
+
+        if (
+            assignment.volunteer == volunteer
+            and assignment.date == date
+        ):
+            return True
+
+    return False
 
 
 # =========================================================
@@ -200,7 +213,15 @@ def assign_role(
         (
             p for p in ranked
 
-            if p not in used_people
+            if (
+                p not in used_people
+
+                and not already_scheduled_same_day(
+                    state,
+                    p,
+                    date
+                )
+            )
         ),
 
         None
