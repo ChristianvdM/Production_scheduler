@@ -1,120 +1,84 @@
 import pandas as pd
-import re
+from pyexcel_ods3 import get_data
+from scheduler.models import HistoricalAssignment
 
-# -------------------------------------------------
-# LOAD DATAFRAME
-# -------------------------------------------------
 
-def load_dataframe(uploaded_file):
+def load_file(uploaded_file):
 
     filename = uploaded_file.name.lower()
 
-    # ---------------------------------------------
-    # CSV
-    # ---------------------------------------------
-
     if filename.endswith(".csv"):
-
-        df = pd.read_csv(uploaded_file)
-
-    # ---------------------------------------------
-    # XLSX
-    # ---------------------------------------------
+        return pd.read_csv(uploaded_file)
 
     elif filename.endswith(".xlsx"):
-
-        df = pd.read_excel(
-            uploaded_file,
-            sheet_name=0
-        )
-
-    # ---------------------------------------------
-    # ODS
-    # ---------------------------------------------
+        return pd.read_excel(uploaded_file)
 
     elif filename.endswith(".ods"):
+        data = get_data(uploaded_file)
+        first_sheet = list(data.keys())[0]
+        rows = data[first_sheet]
 
-        df = pd.read_excel(
-            uploaded_file,
-            engine="odf",
-            sheet_name=0
-        )
+        headers = rows[0]
+        values = rows[1:]
+
+        return pd.DataFrame(values, columns=headers)
 
     else:
+        raise ValueError("Unsupported file format")
 
-        raise ValueError(
-            "Unsupported file format"
-        )
 
-    # ---------------------------------------------
-    # CLEAN COLUMN NAMES
-    # ---------------------------------------------
-
-    df.columns = [
-
-        str(c).strip()
-
-        for c in df.columns
-    ]
-
-    # ---------------------------------------------
-    # REMOVE UNNAMED COLUMNS
-    # ---------------------------------------------
-
-    df = df.loc[
-        :,
-        ~df.columns.str.contains("^Unnamed")
-    ]
-
-    # ---------------------------------------------
-    # AVAILABILITY FILE CLEANING
-    # ---------------------------------------------
-
-    if "availability" in filename:
-
-        cleaned_columns = []
-
-        for col in df.columns:
-
-            if col == "Name":
-
-                cleaned_columns.append(col)
-
-                continue
-
-            # -------------------------------------
-            # STRICT MATCH:
-            # 23 May - Prayer
-            # 24 May - Services
-            # -------------------------------------
-
-            match = re.match(
-
-                r"^\d{1,2}\s+[A-Za-z]+\s*-\s*(Prayer|Services)$",
-
-                str(col).strip()
-            )
-
-            if match:
-
-                cleaned_columns.append(
-                    col
-                )
-
-        # -----------------------------------------
-        # KEEP ONLY VALID DATE COLUMNS
-        # -----------------------------------------
-
-        df = df[
-            cleaned_columns
-        ]
-
-    # ---------------------------------------------
-    # DROP EMPTY ROWS
-    # ---------------------------------------------
-
-    df = df.dropna(
-        how="all"
-    )
+def normalize_names(df):
+    if "Name" in df.columns:
+        df["Name"] = df["Name"].astype(str).str.strip()
 
     return df
+
+
+def load_skills(file):
+    df = load_file(file)
+    return normalize_names(df)
+
+
+def load_availability(file):
+    df = load_file(file)
+    return normalize_names(df)
+
+
+def load_actual_schedule(file):
+
+    if file is None:
+        return []
+
+    df = load_file(file)
+
+    required_columns = [
+        "Name",
+        "Campus",
+        "Role",
+        "ServiceType",
+        "Date",
+        "Served"
+    ]
+
+    missing = [c for c in required_columns if c not in df.columns]
+
+    if missing:
+        raise ValueError(f"Missing columns in actual schedule file: {missing}")
+
+    history = []
+
+    for _, row in df.iterrows():
+
+        history.append(
+            HistoricalAssignment(
+                volunteer=str(row["Name"]).strip(),
+                campus=row["Campus"],
+                role=row["Role"],
+                service_type=row["ServiceType"],
+                date=str(row["Date"]),
+                scheduled=True,
+                served=str(row["Served"]).lower() == "yes"
+            )
+        )
+
+    return history
