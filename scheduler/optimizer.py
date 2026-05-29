@@ -93,7 +93,7 @@ def rank_candidates(
         # RUNNERS PREFER LOWER SKILLS
         # =============================================
 
-        if is_runner_role(role):
+        if is_setup_role(role):
 
             adjusted_skill = (
                 6 - skill_level
