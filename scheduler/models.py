@@ -34,14 +34,63 @@ class HistoricalAssignment:
 SERVICE_CONFIG = {
 
     # =====================================================
-    # SUNDAY SERVICES
+    # TYGERBERG
     # =====================================================
 
-    "Sunday": {
+    "Sunday_Tygerberg": {
 
         "campuses": [
-            "Tygerberg",
-            "Stellies",
+            "Tygerberg"
+        ],
+
+        "roles": [
+
+            "Director",
+
+            "Sound",
+            "Sound Assistant",
+
+            "Lights",
+
+            "Resi",
+
+            "Runner"
+        ]
+    },
+
+    # =====================================================
+    # STELLIES
+    # =====================================================
+
+    "Sunday_Stellies": {
+
+        "campuses": [
+            "Stellies"
+        ],
+
+        "roles": [
+
+            "Director",
+
+            "Sound",
+            "Sound Assistant",
+
+            "Lights",
+            "Lights Assistant",
+
+            "Resi",
+
+            "Runner"
+        ]
+    },
+
+    # =====================================================
+    # PAARL
+    # =====================================================
+
+    "Sunday_Paarl": {
+
+        "campuses": [
             "Paarl"
         ],
 
@@ -49,14 +98,14 @@ SERVICE_CONFIG = {
 
             "Director",
 
-            "Sound Main",
+            "Sound",
             "Sound Assistant",
 
-            "Lights Main",
-            "Lights Assistant",
+            "Lights",
 
-            "Resi Main",
-            "Resi Assistant"
+            "Resi",
+
+            "Runner"
         ]
     },
 
@@ -75,16 +124,14 @@ SERVICE_CONFIG = {
             "Director",
 
             "Sound",
+            "Sound Assistant",
 
             "Lights",
 
             "Resi",
 
-            "Assistant",
-
-            # NEW
-            "Production Setup 1",
-            "Production Setup 2"
+            "Runner 1",
+            "Runner 2"
         ]
     }
 }
