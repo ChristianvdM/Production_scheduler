@@ -110,28 +110,28 @@ SERVICE_CONFIG = {
     },
 
     # =====================================================
-    # PRAYER NIGHTS
-    # =====================================================
+# PRAYER NIGHTS
+# =====================================================
 
-    "Prayer": {
+"Prayer": {
 
-        "campuses": [
-            "Tygerberg"
-        ],
+    "campuses": [
+        "Tygerberg"
+    ],
 
-        "roles": [
+    "roles": [
 
-            "Director",
+        "Director",
 
-            "Sound",
-            "Sound Assistant",
+        "Sound",
+        "Sound Assistant",
 
-            "Lights",
+        "Lights",
 
-            "Resi",
+        "Resi",
 
-            "Runner 1",
-            "Runner 2"
-        ]
-    }
+        "Production Setup 1",
+        "Production Setup 2"
+    ]
+}
 }
