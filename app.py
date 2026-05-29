@@ -51,9 +51,9 @@ This scheduler optimizes:
 - Campus distribution
 
 Rules:
-- Highly skilled volunteers are protected from assistant roles
-- Prayer nights include setup volunteers
-- Historical schedules improve future fairness
+- Volunteers cannot serve on two campuses on the same day
+- High-skilled operators cannot serve as assistants
+- Prayer nights include two runners/setup volunteers
 """)
 
 
@@ -146,25 +146,42 @@ if skills_file and availability_file:
                 date_str = str(date).strip()
 
                 # =========================================
-                # DETERMINE SERVICE TYPE
+                # DETERMINE CONFIGS
                 # =========================================
 
-                service_type = None
+                service_configs = []
 
                 if "Prayer" in date_str:
 
-                    service_type = "Prayer"
+                    service_configs = [
+                        (
+                            "Prayer",
+                            "Tygerberg"
+                        )
+                    ]
 
                 elif "Services" in date_str:
 
-                    service_type = "Sunday"
+                    service_configs = [
 
-                if service_type is None:
+                        (
+                            "Sunday_Tygerberg",
+                            "Tygerberg"
+                        ),
+
+                        (
+                            "Sunday_Stellies",
+                            "Stellies"
+                        ),
+
+                        (
+                            "Sunday_Paarl",
+                            "Paarl"
+                        )
+                    ]
+
+                if not service_configs:
                     continue
-
-                config = SERVICE_CONFIG[
-                    service_type
-                ]
 
                 # =========================================
                 # AVAILABLE PEOPLE
@@ -193,15 +210,19 @@ if skills_file and availability_file:
                 ]["Name"].tolist()
 
                 # =========================================
-                # PROCESS CAMPUSES
+                # PROCESS CONFIGS
                 # =========================================
 
-                for campus in config["campuses"]:
+                for config_key, campus in service_configs:
+
+                    config = SERVICE_CONFIG[
+                        config_key
+                    ]
 
                     used_people = set()
 
                     # =====================================
-                    # PRIORITIZE IMPORTANT ROLES
+                    # PRIORITY ORDER
                     # =====================================
 
                     role_priority = sorted(
@@ -212,7 +233,11 @@ if skills_file and availability_file:
 
                             "Director" not in r,
 
-                            "Main" not in r
+                            "Sound" not in r,
+
+                            "Lights" not in r,
+
+                            "Resi" not in r
                         )
                     )
 
@@ -223,7 +248,7 @@ if skills_file and availability_file:
                     for role in role_priority:
 
                         # =================================
-                        # MAP ROLE TO SKILL COLUMN
+                        # MAP ROLE -> SKILL
                         # =================================
 
                         if role == "Director":
@@ -250,15 +275,10 @@ if skills_file and availability_file:
                                 f"Resi_{campus}"
                             )
 
-                        elif (
-                            "Production Setup"
-                            in role
-                        ):
+                        elif "Runner" in role:
 
-                            # Setup volunteers
-                            # use sound skill
-                            # as proxy
-
+                            # Use sound as
+                            # general proxy
                             skill_column = (
                                 f"Sound_{campus}"
                             )
@@ -295,7 +315,7 @@ if skills_file and availability_file:
 
                             campus=campus,
 
-                            service_type=service_type,
+                            service_type=config_key,
 
                             date=date_str,
 
@@ -332,7 +352,7 @@ if skills_file and availability_file:
         )
 
         # =================================================
-        # PREVIEW TABLE
+        # PREVIEW
         # =================================================
 
         preview_rows = []
@@ -386,14 +406,6 @@ if skills_file and availability_file:
             st.warning(
                 "No assignments generated."
             )
-
-            st.info("""
-Possible reasons:
-- No recognised availability values
-- Skill levels are all 0
-- Skill columns missing
-- Nobody available for required roles
-""")
 
         # =================================================
         # EXPORT
