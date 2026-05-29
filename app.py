@@ -101,7 +101,7 @@ if skills_file and availability_file:
         st.success("Files loaded successfully")
 
         # =================================================
-        # BUILD METRICS
+        # BUILD HISTORICAL METRICS
         # =================================================
 
         metrics = build_historical_metrics(
@@ -162,15 +162,28 @@ if skills_file and availability_file:
                 ]
 
                 # =========================================
-                # AVAILABLE PEOPLE
+                # FIND AVAILABLE PEOPLE
                 # =========================================
 
-                available_people = availability_df[
+                available_values = (
+
                     availability_df[date]
                     .astype(str)
                     .str.strip()
                     .str.lower()
-                    == "yes"
+                )
+
+                available_people = availability_df[
+
+                    available_values.isin([
+                        "yes",
+                        "y",
+                        "true",
+                        "1",
+                        "available",
+                        "x"
+                    ])
+
                 ]["Name"].tolist()
 
                 # =========================================
@@ -182,7 +195,7 @@ if skills_file and availability_file:
                     used_people = set()
 
                     # =====================================
-                    # PRIORITIZE MAIN ROLES
+                    # PRIORITY ORDER
                     # =====================================
 
                     role_priority = sorted(
@@ -194,13 +207,13 @@ if skills_file and availability_file:
                     )
 
                     # =====================================
-                    # PROCESS ROLES
+                    # ASSIGN ROLES
                     # =====================================
 
                     for role in role_priority:
 
                         # =================================
-                        # SKILL COLUMN
+                        # MAP ROLE -> SKILL COLUMN
                         # =================================
 
                         if role == "Director":
@@ -273,13 +286,21 @@ if skills_file and availability_file:
         )
 
         # =================================================
-        # OPTIMIZATION
+        # OPTIMIZATION PASSES
         # =================================================
 
-        state = optimize_schedule(
-            state=state,
-            metrics=metrics,
-            iterations=200
+        with st.spinner(
+            "Optimizing schedule..."
+        ):
+
+            state = optimize_schedule(
+                state=state,
+                metrics=metrics,
+                iterations=200
+            )
+
+        st.success(
+            "Optimization complete"
         )
 
         # =================================================
@@ -337,6 +358,13 @@ if skills_file and availability_file:
                 "No assignments generated."
             )
 
+            st.info("""
+Possible reasons:
+- Availability cells do not contain recognised values
+- Skill levels are all 0
+- Skill columns do not match expected naming
+""")
+
         # =================================================
         # EXPORT
         # =================================================
@@ -363,16 +391,17 @@ if skills_file and availability_file:
         )
 
         # =================================================
-        # SUMMARY STATS
+        # ASSIGNMENT SUMMARY
         # =================================================
-
-        st.markdown(
-            "## 📊 Assignment Summary"
-        )
 
         if preview_rows:
 
+            st.markdown(
+                "## 📊 Assignment Summary"
+            )
+
             summary_df = (
+
                 preview_df
                 .groupby("Volunteer")
                 .size()
